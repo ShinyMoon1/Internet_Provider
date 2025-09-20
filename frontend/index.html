@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetLink - Скоростной интернет для дома и бизнеса</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav container">
+            <div class="nav__logo">
+                <div class="logo">NL</div>
+                <span>NetLink</span>
+            </div>
+            <ul class="nav__menu">
+                <li><a href="#tariffs">Тарифы</a></li>
+                <li><a href="#cover">Покрытие</a></li>
+                <li><a href="#about">О нас</a></li>
+                <li><a href="#contacts">Контакты</a></li>
+            </ul>
+            <button class="nav__toggle" aria-label="Меню">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero__content container">
+            <h1 class="hero__title">Сверхскоростной интернет<br>нового поколения</h1>
+            <p class="hero__subtitle">Подключите интернет со скоростью до 1 Гбит/с с бесплатным роутером и установкой</p>
+            <div class="hero__stats">
+                <div class="stat">
+                    <span class="stat__number">1000+</span>
+                    <span class="stat__label">довольных клиентов</span>
+                </div>
+                <div class="stat">
+                    <span class="stat__number">24/7</span>
+                    <span class="stat__label">техническая поддержка</span>
+                </div>
+                <div class="stat">
+                    <span class="stat__number">99.9%</span>
+                    <span class="stat__label">стабильность сети</span>
+                </div>
+            </div>
+            <a href="#connection_form"><button class="btn btn--primary" id="connectBtn">Подключиться</button></a>
+        </div>
+    </section>
+
+
+    
+
+    <!-- Tariffs Section -->
+    <section id="tariffs" class="tariffs container">
+        <h2 class="section__title">Тарифы</h2>
+        <div class="tariffs__grid">
+            <div class="tariff__card">
+                <h3>Эконом</h3>
+                <div class="tariff__speed">100 Мбит/с</div>
+                <div class="tariff__price">500₽/мес</div>
+                <ul class="tariff__features">
+                    <li>Бесплатное подключение</li>
+                    <li>Роутер в аренду</li>
+                    <li>Круглосуточная поддержка</li>
+                </ul>
+            </div>
+            
+            <div class="tariff__card tariff__card--popular">
+                <div class="popular-badge">Популярный</div>
+                <h3>Стандарт</h3>
+                <div class="tariff__speed">300 Мбит/с</div>
+                <div class="tariff__price">800₽/мес</div>
+                <ul class="tariff__features">
+                    <li>Бесплатное подключение</li>
+                    <li>Роутер в подарок</li>
+                    <li>Приоритетная поддержка</li>
+                    <li>Статический IP</li>
+                </ul>
+            </div>
+            
+            <div class="tariff__card">
+                <h3>Премиум</h3>
+                <div class="tariff__speed">1 Гбит/с</div>
+                <div class="tariff__price">2000₽/мес</div>
+                <ul class="tariff__features">
+                    <li>Бесплатное подключение</li>
+                    <li>Премиум роутер</li>
+                    <li>Персональный менеджер</li>
+                    <li>2 статических IP</li>
+                    <li>Антивирус</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Connection Form -->
+    <section class="container" id="connection_form">
+        <div class="form-container">
+            <h2 class="section__title">Подключение интернета</h2>
+            <form id="applicationForm" class="form">
+                <div class="form__group">
+                    <input type="text" id="customer_name" name="customer_name" required placeholder=" ">
+                    <label for="customer_name">ФИО</label>
+                    <div class="form__error">Поле обязательно для заполнения</div>
+                </div>
+                
+                <div class="form__group">
+                    <input type="email" id="address" name="address" required placeholder=" ">
+                    <label for="address">Адрес подключения</label>
+                    <div class="form__error">Поле обязательно для заполнения</div>
+                </div>
+                
+                <div class="form__group">
+                    <input type="tel" id="phone" name="phone" required placeholder=" " pattern="[\+]{0,1}[0-9]{10,15}">
+                    <label for="phone">Телефон</label>
+                    <div class="form__error">Введите корректный номер телефона</div>
+                </div>
+                
+                <div class="form__group">
+                    <select id="plan" name="plan" required>
+                        <option value="">Выберите тариф</option>
+                        <option value="100 Мбит/с">100 Мбит/с - 500₽/мес</option>
+                        <option value="300 Мбит/с">300 Мбит/с - 800₽/мес</option>
+                        <option value="500 Мбит/с">500 Мбит/с - 1200₽/мес</option>
+                        <option value="1 Гбит/с">1 Гбит/с - 2000₽/мес</option>
+                    </select>
+                    <div class="form__error">Выберите тариф</div>
+                </div>
+                
+                <button type="submit" class="btn btn--primary">Отправить заявку</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Coverage Section -->
+    <section id="cover" class="coverage container">
+        <h2 class="section__title">Покрытие</h2>
+        <div class="coverage__content">
+            <div class="coverage__info">
+                <h3>Мы охватываем весь город</h3>
+                <div class="coverage__stats">
+                    <div class="coverage__stat">
+                        <span class="coverage__number">95%</span>
+                        <span class="coverage__label">покрытие города</span>
+                    </div>
+                    <div class="coverage__stat">
+                        <span class="coverage__number">24</span>
+                        <span class="coverage__label">района подключено</span>
+                    </div>
+                    <div class="coverage__stat">
+                        <span class="coverage__number">1000+</span>
+                        <span class="coverage__label">домов подключено</span>
+                    </div>
+                </div>
+                <div class="coverage__areas">
+                    <h4>Подключенные районы:</h4>
+                    <div class="areas__list">
+                        <span class="area__item">Центральный район</span>
+                        <span class="area__item">Северный район</span>
+                        <span class="area__item">Южный район</span>
+                        <span class="area__item">Западный район</span>
+                        <span class="area__item">Восточный район</span>
+                        <span class="area__item">Микрорайон "Солнечный"</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="about container">
+        <h2 class="section__title">О нас</h2>
+        <div class="about__content">
+            <div class="about__text">
+                <h3>NetLink - надежный интернет-провайдер</h3>
+                <p>Мы работаем на рынке телекоммуникационных услуг более 10 лет, предоставляя высококачественные интернет-услуги для дома и бизнеса.</p>
+                
+                <div class="about__features">
+                    <div class="about__feature">
+                        <div class="feature__icon">⚡</div>
+                        <div class="feature__content">
+                            <h4>Высокая скорость</h4>
+                            <p>До 1 Гбит/с без потерь и ограничений</p>
+                        </div>
+                    </div>
+                    
+                    <div class="about__feature">
+                        <div class="feature__icon">🛡️</div>
+                        <div class="feature__content">
+                            <h4>Надежность</h4>
+                            <p>99.9% uptime гарантированной стабильности</p>
+                        </div>
+                    </div>
+                    
+                    <div class="about__feature">
+                        <div class="feature__icon">👨‍💻</div>
+                        <div class="feature__content">
+                            <h4>Поддержка 24/7</h4>
+                            <p>Круглосуточная техническая поддержка</p>
+                        </div>
+                    </div>
+                    
+                    <div class="about__feature">
+                        <div class="feature__icon">💰</div>
+                        <div class="feature__content">
+                            <h4>Прозрачность</h4>
+                            <p>Никаких скрытых платежей и комиссий</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contacts Section -->
+    <section id="contacts" class="contacts container">
+        <h2 class="section__title">Контакты</h2>
+        <div class="contacts__content">
+            <div class="contacts__info">
+                <h3>Свяжитесь с нами</h3>
+                
+                <div class="contact__item">
+                    <div class="contact__icon">📍</div>
+                    <div class="contact__content">
+                        <h4>Адрес</h4>
+                        <p>г. Москва, ул. Примерная, д. 123, офис 456</p>
+                    </div>
+                </div>
+                
+                <div class="contact__item">
+                    <div class="contact__icon">📞</div>
+                    <div class="contact__content">
+                        <h4>Телефон</h4>
+                        <p>+7 (800) 555-35-35</p>
+                        <p>+7 (495) 123-45-67</p>
+                    </div>
+                </div>
+                
+                <div class="contact__item">
+                    <div class="contact__icon">✉️</div>
+                    <div class="contact__content">
+                        <h4>Email</h4>
+                        <p>info@netlink.ru</p>
+                        <p>support@netlink.ru</p>
+                    </div>
+                </div>
+                
+                <div class="contact__item">
+                    <div class="contact__icon">🕒</div>
+                    <div class="contact__content">
+                        <h4>Часы работы</h4>
+                        <p>Пн-Пт: 9:00 - 18:00</p>
+                        <p>Сб: 10:00 - 16:00</p>
+                        <p>Вс: выходной</p>
+                    </div>
+                </div>
+                
+                <div class="contacts__social">
+                    <h4>Мы в соцсетях:</h4>
+                    <div class="social__links">
+                        <a href="#" class="social__link">VK</a>
+                        <a href="#" class="social__link">Telegram</a>
+                        <a href="#" class="social__link">YouTube</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="contacts__form">
+                <h3>Остались вопросы?</h3>
+                <form class="form">
+                    <div class="form__group">
+                        <input type="text" id="contact_name" required placeholder=" ">
+                        <label for="contact_name">Ваше имя</label>
+                    </div>
+                    
+                    <div class="form__group">
+                        <input type="email" id="contact_email" required placeholder=" ">
+                        <label for="contact_email">Email</label>
+                    </div>
+                    
+                    <div class="form__group">
+                        <input type="tel" id="contact_phone" placeholder=" ">
+                        <label for="contact_phone">Телефон (необязательно)</label>
+                    </div>
+                    
+                    <div class="form__group">
+                        <textarea id="contact_message" rows="4" required placeholder=" "></textarea>
+                        <label for="contact_message">Сообщение</label>
+                    </div>
+                    
+                    <button type="submit" class="btn btn--primary">Отправить сообщение</button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__content">
+                <div class="footer__section">
+                    <h3>NetLink</h3>
+                    <p>Современный интернет для вашего дома и бизнеса</p>
+                </div>
+                <div class="footer__section">
+                    <h4>Контакты</h4>
+                    <p>+7 (800) 555-35-35</p>
+                    <p>info@netlink.ru</p>
+                </div>
+                <div class="footer__section">
+                    <h4>Поддержка</h4>
+                    <p>support@netlink.ru</p>
+                    <p>Круглосуточно</p>
+                </div>
+            </div>
+            <div class="footer__bottom">
+                <p>&copy; 2025 NetLink. Все права защищены.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
