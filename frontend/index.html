@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="script.js" defer></script>
+    <script src="./scripts/script.js" defer></script>
 </head>
 <body>
     <!-- Header -->
@@ -54,9 +54,6 @@
             <a href="#connection_form"><button class="btn btn--primary" id="connectBtn">Подключиться</button></a>
         </div>
     </section>
-
-
-    
 
     <!-- Tariffs Section -->
     <section id="tariffs" class="tariffs container">
@@ -135,7 +132,7 @@
                     <div class="form__error">Выберите тариф</div>
                 </div>
                 
-                <button type="submit" class="btn btn--primary">Отправить заявку</button>
+                <button type="submit" class="btn btn--primary" onclick="downloadPDF()">Отправить заявку</button>
             </form>
         </div>
     </section>
@@ -313,5 +310,15 @@
             </div>
         </div>
     </footer>
+
+    <script src="./scripts/connect.js"></script>
+    <script>
+    function downloadPDF() {
+        const link = document.createElement('a');
+        link.href = '/path/to/your/file.pdf';
+        link.download = 'заявка.pdf';
+        link.click();
+    }
+</script>
 </body>
 </html>

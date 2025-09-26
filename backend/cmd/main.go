@@ -1,15 +1,17 @@
 package main
 
 import (
-	"internet_provider/backend/config"
+	"internet_provider/config"
+	"time"
 
-	"internet_provider/backend/internal/app"
-	"internet_provider/backend/internal/handler"
-	"internet_provider/backend/internal/repository"
-	"internet_provider/backend/internal/service"
-	"internet_provider/backend/internal/storage"
+	"internet_provider/internal/app"
+	"internet_provider/internal/handler"
+	"internet_provider/internal/repository"
+	"internet_provider/internal/service"
+	"internet_provider/internal/storage"
 	"log"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -31,9 +33,18 @@ func main() {
 
 	appRepo := repository.NewGormApplicationRepository(db)
 	appService := service.NewApplicationService(appRepo)
-	appHandler := handler.NewApplicationHandler(appService)
+	pdfService := service.NewPDFService()
+	appHandler := handler.NewApplicationHandler(appService, pdfService)
 
 	router := gin.Default()
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://127.0.0.1:5500", "http://localhost:5500"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 	setupRouters(router, appHandler)
 
 	log.Printf("Server starting on port %s", cfg.Server.Port)
@@ -43,6 +54,7 @@ func main() {
 }
 
 func autoMigrate(db *gorm.DB) error {
+	db.Migrator().DropTable(&app.Application{})
 	return db.AutoMigrate(&app.Application{})
 }
 
@@ -53,7 +65,8 @@ func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler) {
 		{
 			applications.POST("", handler.CreateApplication)
 			applications.GET("", handler.ListApplications)
-			applications.GET("/id", handler.GetApplications)
+			applications.GET("/:id", handler.GetApplication)
+			applications.GET("/:id/pdf", handler.DownloadPDF)
 		}
 	}
 }

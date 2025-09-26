@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"internet_provider/backend/internal/app"
+	"internet_provider/internal/app"
 
 	"gorm.io/gorm"
 )

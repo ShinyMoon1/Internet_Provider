@@ -8,3 +8,4 @@ database:
   password: "228336"
   name: "internet_provider"
   ssl_mode: "disable"
+  timezone: "Europe/Moscow"

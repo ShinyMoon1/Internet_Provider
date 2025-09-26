@@ -2,7 +2,7 @@ package storage
 
 import (
 	"fmt"
-	"internet_provider/backend/config"
+	"internet_provider/config"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -10,7 +10,7 @@ import (
 )
 
 func ConnectPostgres(cfg *config.Config) (*gorm.DB, error) {
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s ",
 		cfg.Database.Host,
 		cfg.Database.Port,
 		cfg.Database.User,
@@ -20,8 +20,10 @@ func ConnectPostgres(cfg *config.Config) (*gorm.DB, error) {
 	)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		// ОТКЛЮЧИТЬ prepared statements
 		DisableAutomaticPing: true,
+		NowFunc: func() time.Time {
+			return time.Now().Local()
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)

@@ -17,8 +17,8 @@ type Application struct {
 	Phone        string    `gorm:"not null" json:"phone"`
 	Plan         string    `json:"plan"`
 	Status       string    `gorm:"default:'new'" json:"status"`
-	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	CreatedAt    time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt    time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP;autoUpdateTime" json:"updated_at"`
 }
 
 type ApplicationRepository interface {
