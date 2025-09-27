@@ -45,6 +45,20 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
             showNotification('Заявка успешно отправлена! Номер: ' + data.id, 'success');
             form.reset();
+            const appId = data.id;
+
+            // 3. Скачиваем PDF
+            const pdfRes = await fetch(`http://localhost:8080/api/v1/applications/${appId}/pdf`);
+            const blob = await pdfRes.blob();
+            const url = window.URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "Заявка.pdf";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
         } catch(error) {
             console.error('Ошибка:', error);
             showNotification('Ошибка отправки: ' + error.message, 'error');

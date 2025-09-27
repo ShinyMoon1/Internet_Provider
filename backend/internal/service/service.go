@@ -55,7 +55,6 @@ func (s *PDFService) GenerateApplicationPDF(application *app.Application) (*byte
 	pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4})
 	pdf.AddPage()
 
-	// Шрифт
 	err := pdf.AddTTFFont("dejavusans", "../fonts/DejaVuSans.ttf")
 	if err != nil {
 		err = pdf.AddTTFFont("times", "assets/fonts/times.ttf")
@@ -67,14 +66,11 @@ func (s *PDFService) GenerateApplicationPDF(application *app.Application) (*byte
 		pdf.SetFont("dejavusans", "", 11)
 	}
 
-	// === ЦВЕТА В СТИЛЕ NETLINK ===
-	primaryColor := gopdf.RGBColor{R: 59, G: 130, B: 246} // Синий из стиля
-	// accentColor := gopdf.RGBColor{R: 99, G: 102, B: 241}  // Фиолетовый акцент
-	darkColor := gopdf.RGBColor{R: 30, G: 41, B: 59}    // Темный
-	grayColor := gopdf.RGBColor{R: 107, G: 114, B: 128} // Серый
-	lightGray := gopdf.RGBColor{R: 243, G: 244, B: 246} // Светло-серый
+	primaryColor := gopdf.RGBColor{R: 59, G: 130, B: 246}
+	darkColor := gopdf.RGBColor{R: 30, G: 41, B: 59}
+	grayColor := gopdf.RGBColor{R: 107, G: 114, B: 128}
+	lightGray := gopdf.RGBColor{R: 243, G: 244, B: 246} 
 
-	// === ШАПКА С ЛОГОТИПОМ ===
 	pdf.SetFillColor(lightGray.R, lightGray.G, lightGray.B)
 	pdf.Rectangle(0, 0, 595, 80, "F", 0, 0)
 
@@ -101,7 +97,6 @@ func (s *PDFService) GenerateApplicationPDF(application *app.Application) (*byte
 
 	pdf.SetY(90)
 
-	// === ЗАГОЛОВОК ДОКУМЕНТА ===
 	pdf.SetFontSize(24)
 	pdf.SetTextColor(darkColor.R, darkColor.G, darkColor.B)
 	pdf.Cell(nil, "Заявка на подключение")
@@ -112,13 +107,11 @@ func (s *PDFService) GenerateApplicationPDF(application *app.Application) (*byte
 	pdf.Cell(nil, "№"+fmt.Sprintf("%d", application.ID))
 	pdf.Br(25)
 
-	// === КАРТОЧКА С ДАННЫМИ ===
 	s.drawCard(&pdf, 40, pdf.GetY(), 515, 180, lightGray)
 
 	pdf.SetY(pdf.GetY() + 20)
 	pdf.SetX(60)
 
-	// Данные в две колонки
 	leftColumn := []struct {
 		Label string
 		Value string
@@ -137,7 +130,6 @@ func (s *PDFService) GenerateApplicationPDF(application *app.Application) (*byte
 		{"Дата:", application.CreatedAt.Format("02.01.2006")},
 	}
 
-	// Левая колонка
 	for _, item := range leftColumn {
 		pdf.SetX(60)
 		pdf.SetFontSize(11)
@@ -151,8 +143,7 @@ func (s *PDFService) GenerateApplicationPDF(application *app.Application) (*byte
 		pdf.Br(20)
 	}
 
-	// Правая колонка
-	pdf.SetY(pdf.GetY() - 60) // Возвращаемся наверх
+	pdf.SetY(pdf.GetY() - 60)
 	for _, item := range rightColumn {
 		pdf.SetX(320)
 		pdf.SetFontSize(11)
@@ -168,7 +159,6 @@ func (s *PDFService) GenerateApplicationPDF(application *app.Application) (*byte
 
 	pdf.SetY(200)
 
-	// === УСЛОВИЯ ПОДКЛЮЧЕНИЯ ===
 	pdf.SetFontSize(18)
 	pdf.SetTextColor(darkColor.R, darkColor.G, darkColor.B)
 	pdf.Cell(nil, "Условия подключения")
@@ -191,17 +181,14 @@ func (s *PDFService) GenerateApplicationPDF(application *app.Application) (*byte
 
 	pdf.Br(30)
 
-	// === ПОДПИСИ И ФУТЕР ===
 	pdf.SetLineWidth(0.5)
 	pdf.SetStrokeColor(lightGray.R, lightGray.G, lightGray.B)
 	pdf.Line(40, pdf.GetY(), 555, pdf.GetY())
 	pdf.Br(20)
 
-	// Подписи в строку
 	pdf.SetFontSize(11)
 	pdf.SetTextColor(grayColor.R, grayColor.G, grayColor.B)
 
-	// Клиент
 	pdf.SetX(60)
 	pdf.Cell(nil, "Подпись клиента")
 	pdf.SetX(60)
@@ -211,7 +198,6 @@ func (s *PDFService) GenerateApplicationPDF(application *app.Application) (*byte
 	pdf.SetY(pdf.GetY() + 15)
 	pdf.Cell(nil, time.Now().Format("02.01.2006"))
 
-	// Сотрудник
 	pdf.SetX(350)
 	pdf.SetY(pdf.GetY() - 20)
 	pdf.Cell(nil, "Подпись сотрудника")
@@ -222,7 +208,6 @@ func (s *PDFService) GenerateApplicationPDF(application *app.Application) (*byte
 	pdf.SetY(pdf.GetY() + 15)
 	pdf.Cell(nil, "М.П.")
 
-	// Футер
 	pdf.SetY(800)
 	pdf.SetFontSize(9)
 	pdf.SetTextColor(grayColor.R, grayColor.G, grayColor.B)
@@ -239,7 +224,6 @@ func (s *PDFService) GenerateApplicationPDF(application *app.Application) (*byte
 	return &buf, nil
 }
 
-// === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
 
 func (s *PDFService) drawCard(pdf *gopdf.GoPdf, x, y, width, height float64, bgColor gopdf.RGBColor) {
 	pdf.SetFillColor(bgColor.R, bgColor.G, bgColor.B)
@@ -253,13 +237,11 @@ func (s *PDFService) drawCard(pdf *gopdf.GoPdf, x, y, width, height float64, bgC
 func (s *PDFService) drawFeatureCard(pdf *gopdf.GoPdf, title, description string) {
 	pdf.SetX(50)
 
-	// Заголовок
 	pdf.SetX(70)
 	pdf.SetFontSize(12)
 	pdf.SetTextColor(0, 0, 0)
 	pdf.Cell(nil, title)
 
-	// Описание
 	pdf.SetX(200)
 	pdf.SetFontSize(11)
 	pdf.SetTextColor(100, 100, 100)
@@ -267,7 +249,6 @@ func (s *PDFService) drawFeatureCard(pdf *gopdf.GoPdf, title, description string
 }
 
 func (s *PDFService) createSimplePDF(application *app.Application) (*bytes.Buffer, error) {
-	// Упрощенная версия в том же стиле
 	pdf := gopdf.GoPdf{}
 	pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4})
 	pdf.AddPage()

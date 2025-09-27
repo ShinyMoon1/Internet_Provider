@@ -15,19 +15,22 @@
     <header class="header">
         <nav class="nav container">
             <div class="nav__logo">
-                <div class="logo">NL</div>
-                <span>NetLink</span>
+            <div class="logo">NL</div>
+            <span>NetLink</span>
             </div>
             <ul class="nav__menu">
-                <li><a href="#tariffs">Тарифы</a></li>
-                <li><a href="#cover">Покрытие</a></li>
-                <li><a href="#about">О нас</a></li>
-                <li><a href="#contacts">Контакты</a></li>
+            <li><a href="#tariffs">Тарифы</a></li>
+            <li><a href="#cover">Покрытие</a></li>
+            <li><a href="#about">О нас</a></li>
+            <li><a href="#contacts">Контакты</a></li>
             </ul>
+
+            <a href="./account/account.html" id="profileBtn" class="btn profile-btn">Личный кабинет</a>
+
             <button class="nav__toggle" aria-label="Меню">
-                <span></span>
-                <span></span>
-                <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
             </button>
         </nav>
     </header>
@@ -132,7 +135,7 @@
                     <div class="form__error">Выберите тариф</div>
                 </div>
                 
-                <button type="submit" class="btn btn--primary" onclick="downloadPDF()">Отправить заявку</button>
+                <button type="submit" class="btn btn--primary">Отправить заявку</button>
             </form>
         </div>
     </section>
@@ -312,13 +315,6 @@
     </footer>
 
     <script src="./scripts/connect.js"></script>
-    <script>
-    function downloadPDF() {
-        const link = document.createElement('a');
-        link.href = '/path/to/your/file.pdf';
-        link.download = 'заявка.pdf';
-        link.click();
-    }
-</script>
+
 </body>
 </html>
