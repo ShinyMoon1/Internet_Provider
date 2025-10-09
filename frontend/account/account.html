@@ -1,25 +1,29 @@
 <!DOCTYPE html>
 <html lang="ru">
+<!-- В начале файла -->
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NetLink — Личный кабинет</title>
+  <link rel="stylesheet" href="../style.css">
   <link rel="stylesheet" href="account.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="./connect.js" defer></script>
 </head>
 <body>
+<!-- В навигации -->
   <header class="header">
-    <nav class="nav container">
-      <div class="nav__logo">
-        <div class="logo">NL</div>
-        <span>NetLink</span>
-      </div>
-      <ul class="nav__menu">
-        <li><a href="../index.html">Главная</a></li>
-      </ul>
-    </nav>
+      <nav class="nav container">
+          <div class="nav__logo">
+              <div class="logo">NL</div>
+              <span>NetLink</span>
+          </div>
+          <ul class="nav__menu">
+              <li><a href="../index.html">Главная</a></li>  <!-- Изменили путь -->
+          </ul>
+      </nav>
   </header>
 
   <section class="account container">
@@ -29,7 +33,6 @@
         <button class="tab" data-tab="register">Регистрация</button>
       </div>
 
-      <!-- Вход -->
       <form id="loginForm" class="form active">
         <h2 class="form__title">Вход в личный кабинет</h2>
         <div class="form__group">
@@ -43,7 +46,6 @@
         <button type="submit" class="btn btn--primary">Войти</button>
       </form>
 
-      <!-- Регистрация -->
       <form id="registerForm" class="form">
         <h2 class="form__title">Регистрация</h2>
         <div class="form__group">
@@ -66,21 +68,5 @@
       </form>
     </div>
   </section>
-
-  <script>
-    // переключение вкладок
-    const tabs = document.querySelectorAll('.tab');
-    const forms = document.querySelectorAll('.form');
-
-    tabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        tabs.forEach(t => t.classList.remove('active'));
-        forms.forEach(f => f.classList.remove('active'));
-
-        tab.classList.add('active');
-        document.getElementById(tab.dataset.tab + 'Form').classList.add('active');
-      });
-    });
-  </script>
 </body>
 </html>

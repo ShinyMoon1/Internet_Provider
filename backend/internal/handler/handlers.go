@@ -2,6 +2,7 @@ package handler
 
 import (
 	"internet_provider/internal/app"
+	"internet_provider/internal/repository"
 	"internet_provider/internal/service"
 	"net/http"
 	"strconv"
@@ -10,8 +11,9 @@ import (
 )
 
 type ApplicationHandler struct {
-	service *service.ApplicationService
-	pdf     *service.PDFService
+	service  *service.ApplicationService
+	pdf      *service.PDFService
+	userRepo *repository.UserRepository
 }
 
 func NewApplicationHandler(service *service.ApplicationService, pdf *service.PDFService) *ApplicationHandler {
@@ -64,13 +66,11 @@ func (h *ApplicationHandler) ListApplications(c *gin.Context) {
 func (h *ApplicationHandler) CreateApplicationPDF(c *gin.Context) {
 	var application app.Application
 
-	// Получаем данные из формы
 	if err := c.ShouldBindJSON(&application); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверные данные: " + err.Error()})
 		return
 	}
 
-	// Проверяем обязательные поля
 	if application.CustomerName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Имя клиента обязательно"})
 		return
@@ -84,29 +84,24 @@ func (h *ApplicationHandler) CreateApplicationPDF(c *gin.Context) {
 		return
 	}
 
-	// Создаем заявку в базе данных
 	if err := h.service.CreateApplication(&application); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка сохранения: " + err.Error()})
 		return
 	}
 
-	// Генерируем PDF
 	pdfBuffer, err := h.pdf.GenerateApplicationPDF(&application)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка генерации PDF: " + err.Error()})
 		return
 	}
 
-	// Отправляем PDF файл пользователю
 	filename := "заявка_на_подключение_" + strconv.Itoa(int(application.ID)) + ".pdf"
 
-	// Устанавливаем заголовки для скачивания файла
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", "attachment; filename="+filename)
 	c.Header("Content-Transfer-Encoding", "binary")
 	c.Header("Cache-Control", "no-cache")
 
-	// Отправляем PDF
 	c.Data(http.StatusOK, "application/pdf", pdfBuffer.Bytes())
 }
 

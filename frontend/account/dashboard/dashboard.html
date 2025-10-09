@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetLink — Личный кабинет</title>
+    <link rel="stylesheet" href="./dashboard.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <header class="header">
+        <nav class="nav container">
+            <div class="nav__logo">
+                <div class="logo">
+                    NL
+                </div>
+                <span>NetLink</span>
+            </div>
+            <ul class="nav__menu">
+                <li><a href="../../index.html"><i class="fas fa-home"></i> Главная</a></li>
+                <li><a href="../account.html" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Выйти</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <section class="dashboard container">
+        <div class="dashboard__header">
+            <h1 class="dashboard__title">
+                <i class="fas fa-user-circle"></i>
+                Личный кабинет
+            </h1>
+            <div class="dashboard__subtitle">Управление вашими интернет-услугами</div>
+        </div>
+
+        <!-- Приветствие и быстрые действия -->
+        <div class="dashboard__greeting card card--gradient">
+            <div class="greeting__content">
+                <h2>Добро пожаловать, <span id="userName" class="user-name">Пользователь</span>! 👋</h2>
+                <p>Рады видеть вас в личном кабинете NetLink. Для начала использования услуг необходимо активировать тарифный план.</p>
+            </div>
+        </div>
+
+        <!-- Основные виджеты -->
+        <div class="dashboard__grid">
+            <!-- Финансы -->
+            <div class="dashboard__widget card card--primary">
+                <div class="widget__header">
+                    <i class="fas fa-wallet widget__icon"></i>
+                    <h3>Финансы</h3>
+                </div>
+                <div class="widget__content">
+                    <div class="info-item">
+                        <span class="info-label">Лицевой счет:</span>
+                        <strong id="userAccount" class="info-value">#---</strong>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Текущий баланс:</span>
+                        <strong id="userBalance" class="balance-amount">0.00</strong>
+                        <strong id="userBalance" class="balance-amount">руб.</strong>
+                    </div>
+                    <div class="balance-status">
+                        <i class="fas fa-info-circle status-warning"></i>
+                        <span>Тариф не активирован</span>
+                        <small>Услуги недоступны</small>
+                    </div>
+                </div>
+                <div class="widget__actions">
+                    <button class="btn btn--white btn--full">
+                        <i class="fas fa-plus"></i>
+                        Пополнить счет
+                    </button>
+                </div>
+            </div>
+
+            <!-- Тариф -->
+            <div class="dashboard__widget card tariff-inactive">
+                <div class="widget__header">
+                    <i class="fas fa-tachometer-alt widget__icon"></i>
+                    <h3>Мой тариф</h3>
+                    <div class="tariff-badge" id="tariffBadge" style="background: #95a5a6;">НЕ АКТИВЕН</div>
+                </div>
+                <div class="widget__content">
+                    <div class="tariff-card">
+                        <h4 id="userTariff" class="tariff-name" style="color: #95a5a6;">Тариф не активирован</h4>
+                        <div class="tariff-price" id="tariffPrice" style="color: #95a5a6;">0 руб./мес.</div>
+                        <div class="tariff-features" id="tariffFeatures">
+                            <div class="feature">
+                                <i class="fas fa-times-circle"></i>
+                                <span>Скорость: 0 Мбит/с</span>
+                            </div>
+                            <div class="feature">
+                                <i class="fas fa-ban"></i>
+                                <span>Трафик: Нет доступа</span>
+                            </div>
+                            <div class="feature">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <span>Статус: Требуется активация</span>
+                            </div>
+                            <div class="feature">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Интернет недоступен</span>
+                            </div>
+                            <div class="feature">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Подключите тариф для начала использования</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="widget__actions">
+                    <button class="btn btn--primary" id="chooseTariffBtn" onclick="showTariffModal()">
+                        <i class="fas fa-plug"></i>
+                        Выбрать тариф
+                    </button>
+                    <button class="btn btn--primary" id="activateTariffBtn" onclick="activateTariff()">
+                        <i class="fas fa-plug"></i>
+                        Активировать тариф
+                    </button>
+                </div>
+            </div>
+
+
+    <!-- Модальное окно для подключения тарифа -->
+    <div id="tariffModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Подключение тарифного плана</h3>
+            </div>
+            <div class="modal-body">
+                <div class="tariff-options">
+                    <div class="tariff-option" data-tariff-id="1">
+                        <h4>Базовый 50 Мбит/с</h4>
+                        <div class="tariff-price">300 руб./мес.</div>
+                        <ul>
+                            <li>Скорость: 50 Мбит/с</li>
+                            <li>Трафик: Безлимитный</li>
+                            <li>До 3 устройств</li>
+                            <li>Базовая защита</li>
+                        </ul>
+                        <button class="btn btn--outline select-tariff">Выбрать</button>
+                    </div>
+                    
+                    <div class="tariff-option popular" data-tariff-id="2">
+                        <div class="popular-badge">Популярный</div>
+                        <h4>Оптимальный 100 Мбит/с</h4>
+                        <div class="tariff-price">500 руб./мес.</div>
+                        <ul>
+                            <li>Скорость: 100 Мбит/с</li>
+                            <li>Трафик: Безлимитный</li>
+                            <li>До 5 устройств</li>
+                            <li>Расширенная защита</li>
+                            <li>Статический IP</li>
+                        </ul>
+                        <button class="btn btn--primary select-tariff">Выбрать</button>
+                    </div>
+                    
+                    <div class="tariff-option" data-tariff-id="3">
+                        <h4>Премиум 200 Мбит/с</h4>
+                        <div class="tariff-price">800 руб./мес.</div>
+                        <ul>
+                            <li>Скорость: 200 Мбит/с</li>
+                            <li>Трафик: Безлимитный</li>
+                            <li>До 10 устройств</li>
+                            <li>Максимальная защита</li>
+                            <li>2 статических IP</li>
+                            <li>Резервный канал</li>
+                        </ul>
+                        <button class="btn btn--outline select-tariff">Выбрать</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn--secondary" id="closeModalBtn">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="./script.js"></script>
+</body>

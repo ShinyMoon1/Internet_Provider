@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"internet_provider/internal/app"
+	"internet_provider/internal/entity"
 	"internet_provider/internal/handler"
 	"internet_provider/internal/repository"
 	"internet_provider/internal/service"
@@ -36,6 +37,9 @@ func main() {
 	pdfService := service.NewPDFService()
 	appHandler := handler.NewApplicationHandler(appService, pdfService)
 
+	userRepo := repository.NewUserRepository(db)
+	authHandler := handler.NewAuthHandler(userRepo)
+
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://127.0.0.1:5500", "http://localhost:5500"},
@@ -45,7 +49,7 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
-	setupRouters(router, appHandler)
+	setupRouters(router, appHandler, authHandler)
 
 	log.Printf("Server starting on port %s", cfg.Server.Port)
 	if err := router.Run(":" + cfg.Server.Port); err != nil {
@@ -54,11 +58,24 @@ func main() {
 }
 
 func autoMigrate(db *gorm.DB) error {
-	db.Migrator().DropTable(&app.Application{})
-	return db.AutoMigrate(&app.Application{})
+	tables := []interface{}{
+		&app.Application{},
+		&entity.User{},
+	}
+
+	for _, table := range tables {
+		if !db.Migrator().HasTable(table) {
+			if err := db.Migrator().CreateTable(table); err != nil {
+				return err
+			}
+			log.Printf("Table created for %T", table)
+		}
+	}
+
+	return nil
 }
 
-func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler) {
+func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler, authHandler *handler.AuthHandler) {
 	api := router.Group("/api/v1")
 	{
 		applications := api.Group("/applications")
@@ -67,6 +84,12 @@ func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler) {
 			applications.GET("", handler.ListApplications)
 			applications.GET("/:id", handler.GetApplication)
 			applications.GET("/:id/pdf", handler.DownloadPDF)
+		}
+
+		auth := api.Group("/auth")
+		{
+			auth.POST("/register", authHandler.Register)
+			auth.POST("/login", authHandler.Login)
 		}
 	}
 }
