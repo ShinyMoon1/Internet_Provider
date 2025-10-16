@@ -7,35 +7,35 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
+	Server   ServerConfig   `yaml:"server"`
+	Database DatabaseConfig `yaml:"database"`
 }
 
 type ServerConfig struct {
-	Port string
+	Port string `yaml:"port"`
 }
 
 type DatabaseConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Name     string
-	SSLMode  string
+	Host     string `yaml:"host"`
+	Port     string `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Name     string `yaml:"name"`
+	SSLMode  string `yaml:"ssl_mode"`
+	TimeZone string `yaml:"timezone"`
 }
 
 func LoadConf(filename string) (*Config, error) {
-    // Чтение конфига из файла
-    data, err := os.ReadFile(filename)
-    if err != nil {
-        return nil, err
-    }
-    
-    var config Config
-    err = yaml.Unmarshal(data, &config) // или json.Unmarshal
-    if err != nil {
-        return nil, err
-    }
-    
-    return &config, nil
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &config, nil
 }
