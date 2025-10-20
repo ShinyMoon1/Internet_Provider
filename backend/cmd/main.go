@@ -58,6 +58,17 @@ func main() {
 }
 
 func autoMigrate(db *gorm.DB) error {
+	if db.Migrator().HasTable(&entity.User{}) {
+		if !db.Migrator().HasColumn(&entity.User{}, "TariffID") {
+			err := db.Migrator().AddColumn(&entity.User{}, "TariffID")
+			if err != nil {
+				log.Printf("Ошибка добавления tariff_id: %v", err)
+				return err
+			}
+			log.Println("✅ Добавлен столбец tariff_id в таблицу users")
+		}
+	}
+
 	tables := []interface{}{
 		&app.Application{},
 		&entity.User{},
@@ -90,6 +101,8 @@ func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler, authH
 		{
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/login", authHandler.Login)
+			auth.POST("/activate-tariff", authHandler.ActivateTarrif)
+			auth.GET("/:id", authHandler.GetUserProfile)
 		}
 	}
 }

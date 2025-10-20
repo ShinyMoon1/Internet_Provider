@@ -1,30 +1,50 @@
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Страница загружена');
-    
-    // Проверяем авторизацию
+document.addEventListener('DOMContentLoaded', async () => {
     const userData = localStorage.getItem('netlinkUser');
     if (!userData) {
-        window.location.href = '../account.html';
+        window.location.href = '/account';
         return;
     }
 
-    const user = JSON.parse(userData);
-    console.log('Пользователь:', user);
-    
-    // Заполняем данные пользователя
-    document.getElementById('userName').textContent = user.name;
-    document.getElementById('userAccount').textContent = user.account_number;
-    document.getElementById('userBalance').textContent = '1000';
+    try {
+        const user = await loadUserData();
+        
+        document.getElementById('userName').textContent = user.name;
+        document.getElementById('userAccount').textContent = user.accountn;
+        document.getElementById('userBalance').textContent = user.balance;
 
-    // Загружаем тариф
-    const tariffData = getTariffData(user.tariff_id);
-    updateTariffDisplay(tariffData);
-    updateTariffFeatures(tariffData);
-    updateBalanceStatus(user.balance);
-
-    // Настраиваем обработчики
-    setupEventListeners();
+        const tariffData = getTariffData(user.tariff_id);
+        updateTariffDisplay(tariffData);
+        updateTariffFeatures(tariffData);
+        updateBalanceStatus(user.balance);
+        setupEventListeners();
+        
+    } catch (error) {
+        console.error('Ошибка загрузки данных:', error);
+        const user = JSON.parse(userData);
+    }
 });
+
+async function loadUserData() {
+    const userData = localStorage.getItem('netlinkUser');
+    const user = JSON.parse(userData);
+    
+    console.log('Загружаем данные пользователя ID:', user.id);
+    
+    const response = await fetch(`http://localhost:8080/api/v1/auth/${user.id}`);
+    
+    console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+        throw new Error(`Ошибка сервера: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    console.log('Данные получены:', result);
+    
+    localStorage.setItem('netlinkUser', JSON.stringify(result.user));
+    
+    return result.user;
+}
 
 function getTariffData(tariffId) {
     const tariffs = {
@@ -174,15 +194,7 @@ function updateBalanceStatus(balance) {
         return;
     }
     
-    if (balance < 0) {
-        balanceElement.classList.add('balance-negative');
-        statusElement.innerHTML = `
-            <i class="fas fa-exclamation-triangle status-negative"></i>
-            <span>Отрицательный баланс</span>
-            <small>Пополните счет для продолжения услуг</small>
-        `;
-        statusElement.style.background = '#fee';
-    } else if (balance < 100) {
+    if (balance < 300) {
         balanceElement.classList.add('balance-warning');
         statusElement.innerHTML = `
             <i class="fas fa-info-circle status-warning"></i>
@@ -198,13 +210,13 @@ function updateBalanceStatus(balance) {
             <small>Баланс положительный</small>
         `;
         statusElement.style.background = '#f8f9fa';
+        balanceElement.classList.remove('balance-warning');
     }
 }
 
 function setupEventListeners() {
     console.log('Настройка обработчиков...');
     
-    // Кнопка выхода
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', function(e) {
@@ -216,25 +228,21 @@ function setupEventListeners() {
         });
     }
 
-    // Кнопка выбора тарифа
     const chooseTariffBtn = document.getElementById('chooseTariffBtn');
     if (chooseTariffBtn) {
         chooseTariffBtn.addEventListener('click', showTariffModal);
     }
 
-    // Кнопка закрытия модального окна
     const closeModalBtn = document.getElementById('closeModalBtn');
     if (closeModalBtn) {
         closeModalBtn.addEventListener('click', closeTariffModal);
     }
 
-    // Кнопка активации в модальном окне
     const activateModalBtn = document.getElementById('activateTariffModalBtn');
     if (activateModalBtn) {
         activateModalBtn.addEventListener('click', activateSelectedTariff);
     }
 
-    // Кнопки выбора тарифа в модальном окне
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('select-tariff')) {
             console.log('Клик по выбору тарифа');
@@ -246,7 +254,6 @@ function setupEventListeners() {
         }
     });
 
-    // Закрытие модального окна по клику вне его
     window.addEventListener('click', function(e) {
         const modal = document.getElementById('tariffModal');
         if (modal && e.target === modal) {
@@ -254,33 +261,27 @@ function setupEventListeners() {
         }
     });
 
-    // Скрываем кнопку активации на основной странице
     const activateBtn = document.getElementById('activateTariffBtn');
     if (activateBtn) {
         activateBtn.style.display = 'none';
     }
 }
 
-// Выбор тарифа в модальном окне
 function selectTariff(tariffId) {
     console.log('Выбор тарифа:', tariffId);
     
-    // Убираем выделение у всех тарифов
     document.querySelectorAll('.tariff-option').forEach(option => {
         option.style.borderColor = '';
         option.style.background = '';
     });
     
-    // Выделяем выбранный тариф
     const selectedOption = document.querySelector(`[data-tariff-id="${tariffId}"]`);
     if (selectedOption) {
         selectedOption.style.borderColor = '#3498db';
         selectedOption.style.background = '#f0f8ff';
         
-        // Сохраняем выбранный тариф
         localStorage.setItem('selectedTariff', tariffId);
         
-        // Показываем кнопку активации в модальном окне
         const activateModalBtn = document.getElementById('activateTariffModalBtn');
         if (activateModalBtn) {
             activateModalBtn.style.display = 'inline-block';
@@ -288,55 +289,74 @@ function selectTariff(tariffId) {
     }
 }
 
-// Активация выбранного тарифа
-function activateSelectedTariff() {
+async function activateSelectedTariff() {
+    console.log('Функция activateSelectedTariff вызвана');
+    
     const selectedTariffId = localStorage.getItem('selectedTariff');
-    console.log('Активация тарифа:', selectedTariffId);
+    console.log('selectedTariffId:', selectedTariffId);
+    
+    const userData = localStorage.getItem('netlinkUser');
+    console.log('userData:', userData);
     
     if (!selectedTariffId) {
         alert('Сначала выберите тариф!');
         return;
     }
 
-    const userData = localStorage.getItem('netlinkUser');
     if (!userData) return;
 
     const user = JSON.parse(userData);
     const tariffData = getTariffData(parseInt(selectedTariffId));
     
-    const confirmMessage = `Вы уверены, что хотите активировать тариф "${tariffData.name}" за ${tariffData.price} руб./мес.?`;
+    const confirmMessage = `Вы уверены, что хотите активировать тариф "${tariffData.name}"?`;
     
     if (!confirm(confirmMessage)) {
         return;
     }
-    
-    // Обновляем баланс
-    const balanceElement = document.getElementById('userBalance');
-    let currentBalance = parseInt(balanceElement.textContent) || 0;
-    let newBalance = currentBalance - tariffData.price;
-    
-    if (newBalance < 0) {
-        alert('Недостаточно средств на счете!');
-        return;
+
+    try {
+        const activateBtn = document.getElementById('activateTariffModalBtn');
+        const originalText = activateBtn.innerHTML;
+        activateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Активация...';
+        activateBtn.disabled = true;
+
+        const response = await fetch('http://localhost:8080/api/v1/auth/activate-tariff', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                user_id: user.id,
+                tariff_id: parseInt(selectedTariffId)
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Ошибка сервера');
+        }
+
+        const result = await response.json();
+        
+        user.tariff_id = parseInt(selectedTariffId);
+        localStorage.setItem('netlinkUser', JSON.stringify(user));
+        
+        updateTariffDisplay(tariffData);
+        updateTariffFeatures(tariffData);
+        
+        closeTariffModal();
+        
+        alert(`Тариф "${tariffData.name}" успешно активирован!`);
+        
+    } catch (error) {
+        console.error('Ошибка активации тарифа:', error);
+        alert('Ошибка при активации тарифа. Попробуйте позже.');
+    } finally {
+        const activateBtn = document.getElementById('activateTariffModalBtn');
+        if (activateBtn) {
+            activateBtn.innerHTML = '<i class="fas fa-plug"></i> Активировать тариф';
+            activateBtn.disabled = false;
+        }
     }
-    
-    balanceElement.textContent = newBalance;
-    
-    // Обновляем данные пользователя
-    user.tariff_id = parseInt(selectedTariffId);
-    user.balance = newBalance;
-    localStorage.setItem('netlinkUser', JSON.stringify(user));
-    
-    // Обновляем отображение
-    const updatedTariffData = getTariffData(parseInt(selectedTariffId));
-    updateTariffDisplay(updatedTariffData);
-    updateTariffFeatures(updatedTariffData);
-    updateBalanceStatus(newBalance);
-    
-    // Закрываем модальное окно
-    closeTariffModal();
-    
-    alert(`Тариф "${tariffData.name}" успешно активирован!`);
 }
 
 function showTariffModal() {
@@ -345,19 +365,16 @@ function showTariffModal() {
     if (modal) {
         modal.style.display = 'block';
         
-        // Сбрасываем выделение
         document.querySelectorAll('.tariff-option').forEach(option => {
             option.style.borderColor = '';
             option.style.background = '';
         });
         
-        // Скрываем кнопку активации в модальном окне
         const activateModalBtn = document.getElementById('activateTariffModalBtn');
         if (activateModalBtn) {
             activateModalBtn.style.display = 'none';
         }
         
-        // Очищаем выбранный тариф
         localStorage.removeItem('selectedTariff');
     }
 }
@@ -370,7 +387,6 @@ function closeTariffModal() {
     }
 }
 
-// Добавляем CSS для модального окна
 const style = document.createElement('style');
 style.textContent = `
     .modal {

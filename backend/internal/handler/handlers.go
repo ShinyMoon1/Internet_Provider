@@ -2,7 +2,6 @@ package handler
 
 import (
 	"internet_provider/internal/app"
-	"internet_provider/internal/repository"
 	"internet_provider/internal/service"
 	"net/http"
 	"strconv"
@@ -11,9 +10,8 @@ import (
 )
 
 type ApplicationHandler struct {
-	service  *service.ApplicationService
-	pdf      *service.PDFService
-	userRepo *repository.UserRepository
+	service *service.ApplicationService
+	pdf     *service.PDFService
 }
 
 func NewApplicationHandler(service *service.ApplicationService, pdf *service.PDFService) *ApplicationHandler {
