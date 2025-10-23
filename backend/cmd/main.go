@@ -37,8 +37,12 @@ func main() {
 	pdfService := service.NewPDFService()
 	appHandler := handler.NewApplicationHandler(appService, pdfService)
 
+	paymentRepo := repository.NewPaymentRepository(db)
+
 	userRepo := repository.NewUserRepository(db)
 	authHandler := handler.NewAuthHandler(userRepo)
+
+	paymenthandler := handler.NewPaymentHandler(paymentRepo)
 
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{
@@ -49,7 +53,7 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
-	setupRouters(router, appHandler, authHandler)
+	setupRouters(router, appHandler, authHandler, paymenthandler)
 
 	log.Printf("Server starting on port %s", cfg.Server.Port)
 	if err := router.Run(":" + cfg.Server.Port); err != nil {
@@ -65,13 +69,14 @@ func autoMigrate(db *gorm.DB) error {
 				log.Printf("Ошибка добавления tariff_id: %v", err)
 				return err
 			}
-			log.Println("✅ Добавлен столбец tariff_id в таблицу users")
+			log.Println("Добавлен столбец tariff_id в таблицу users")
 		}
 	}
 
 	tables := []interface{}{
 		&app.Application{},
 		&entity.User{},
+		&entity.Payment{},
 	}
 
 	for _, table := range tables {
@@ -86,7 +91,7 @@ func autoMigrate(db *gorm.DB) error {
 	return nil
 }
 
-func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler, authHandler *handler.AuthHandler) {
+func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler, authHandler *handler.AuthHandler, payHandler *handler.PaymentHandler) {
 	api := router.Group("/api/v1")
 	{
 		applications := api.Group("/applications")
@@ -103,6 +108,11 @@ func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler, authH
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/activate-tariff", authHandler.ActivateTarrif)
 			auth.GET("/:id", authHandler.GetUserProfile)
+		}
+
+		pay := api.Group("/pay")
+		{
+			pay.POST("/:id", payHandler.ToUpBalance)
 		}
 	}
 }
