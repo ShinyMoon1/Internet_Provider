@@ -139,12 +139,12 @@ func (h *AuthHandler) GetUserProfile(c *gin.Context) {
 	err := h.userRepo.LoadTariff(&user, userID)
 
 	if err != nil {
-		log.Printf("❌ Пользователь с ID=%s не найден: %v", userID, err)
+		log.Printf("Пользователь с ID=%s не найден: %v", userID, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный фрмат данных" + err.Error()})
 		return
 	}
 
-	log.Printf("✅ Найден пользователь: %+v", user)
+	log.Printf("Найден пользователь: %+v", user)
 	c.JSON(http.StatusOK, gin.H{
 		"user": user,
 	})

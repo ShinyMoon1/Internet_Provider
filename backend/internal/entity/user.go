@@ -8,7 +8,7 @@ type User struct {
 	PasswordHash  string  `gorm:"size:255;not null" json:"-"`
 	AccountNumber string  `gorm:"size:20;uniqueIndex;not null" json:"accountn"`
 	Balance       float64 `gorm:"type:decimal(10,2);default:0.00" json:"balance"`
-	TariffID      *int     `gorm:"default:null" json:"tariff_id"`
+	TariffID      *int    `gorm:"default:null" json:"tariff_id"`
 }
 
 type RegisterRequest struct {
