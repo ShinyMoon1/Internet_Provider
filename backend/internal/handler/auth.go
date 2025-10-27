@@ -117,16 +117,54 @@ func (h *AuthHandler) ActivateTarrif(c *gin.Context) {
 		return
 	}
 
-	err := h.userRepo.SetTariff(request.UserID, request.UserID)
+	user, err := h.userRepo.GetUserByID(int64(request.UserID))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
 
+	tariff, err := h.userRepo.GetTariffByID(int64(request.TariffID))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if user.Balance < tariff.Price {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":    "Недостаточно средств для активации тарифа",
+			"required": tariff.Price,
+			"current":  user.Balance,
+			"missing":  tariff.Price - user.Balance,
+		})
+		return
+	}
+
+	err = h.userRepo.UpdateBalance(int64(request.UserID), -tariff.Price)
+	if err != nil {
+		log.Printf("Ошибка списания денег: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при списании средств"})
+		return
+	}
+
+	err = h.userRepo.SetTariff(int64(request.UserID), int64(request.TariffID))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при обновлении тарифа"})
 		return
 	}
 
+	newBalance := user.Balance - tariff.Price
+	log.Printf("Тариф активирован успешно. Списано: %.2f, Новый баланс: %.2f", tariff.Price, newBalance)
+
+	log.Printf("Тариф активирован успешно. Новый баланс: %.2f", newBalance)
+
 	c.JSON(http.StatusOK, gin.H{
-		"message":   "Траиф успешно активирован",
-		"tariff_id": request.TariffID,
+		"message": "Тариф успешно активирован",
+		"tariff": gin.H{
+			"id":    tariff.ID,
+			"name":  tariff.Name,
+			"price": tariff.Price,
+		},
+		"new_balance": newBalance,
 	})
 }
 
