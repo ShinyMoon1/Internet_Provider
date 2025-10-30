@@ -7,6 +7,13 @@ document.addEventListener('DOMContentLoaded', function() {
 function initBalanceFunctionality() {
     console.log('Инициализация функционала пополнения баланса');
     
+    // Проверяем авторизацию
+    const userData = localStorage.getItem('netlinkUser');
+    if (!userData) {
+        console.warn('Пользователь не авторизован');
+        return;
+    }
+    
     // Кнопка пополнения баланса
     const topUpBtn = document.querySelector('.btn--white');
     if (topUpBtn) {
@@ -116,6 +123,8 @@ function processPayment() {
 }
 
 async function simulatePayment(amount, paymentMethod) {
+    console.log('Начало процесса оплаты:', { amount, paymentMethod });
+    
     // Показываем индикатор загрузки
     const confirmBtn = document.getElementById('confirmPaymentBtn');
     const originalText = confirmBtn.innerHTML;
@@ -123,32 +132,52 @@ async function simulatePayment(amount, paymentMethod) {
     confirmBtn.disabled = true;
     
     try {
-        // Отправляем запрос на сервер для пополнения баланса
+        // Получаем данные пользователя
         const userData = localStorage.getItem('netlinkUser');
         if (!userData) throw new Error('Пользователь не найден');
 
         const user = JSON.parse(userData);
+        const userId = user.id;
         
-        const response = await fetch('/api/v1/applications/topup-balance', {
+        console.log('Данные для запроса:', {
+            userId,
+            amount,
+            paymentMethod
+        });
+
+        // Отправляем запрос на бекенд
+        const response = await fetch(`http://localhost:8080/api/v1/pay/${userId}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                user_id: user.id,
                 amount: amount,
                 payment_method: paymentMethod
             })
         });
 
+        console.log('Статус ответа:', response.status);
+        console.log('Ответ OK:', response.ok);
+
         if (!response.ok) {
-            throw new Error('Ошибка сервера');
+            let errorMessage = 'Ошибка сервера';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorMessage;
+            } catch (e) {
+                errorMessage = `HTTP error! status: ${response.status}`;
+            }
+            throw new Error(errorMessage);
         }
 
+        // Парсим успешный ответ
         const result = await response.json();
+        console.log('Успешный ответ от сервера:', result);
         
-        // Обновляем баланс на основе ответа сервера
-        updateUserBalanceFromServer(result.new_balance);
+        // Обновляем баланс на фронтенде
+        const newBalance = (user.balance || 0) + amount;
+        updateUserBalanceFromServer(newBalance);
         
         // Восстанавливаем кнопку
         confirmBtn.innerHTML = originalText;
@@ -161,8 +190,8 @@ async function simulatePayment(amount, paymentMethod) {
         showPaymentSuccess(amount, paymentMethod);
         
     } catch (error) {
-        console.error('Ошибка оплаты:', error);
-        alert('Ошибка при обработке платежа. Попробуйте позже.');
+        console.error('Полная ошибка оплаты:', error);
+        alert('Ошибка при обработке платежа: ' + error.message);
         
         // Восстанавливаем кнопку при ошибке
         confirmBtn.innerHTML = originalText;
@@ -174,9 +203,10 @@ function updateUserBalanceFromServer(newBalance) {
     const balanceElement = document.getElementById('userBalance');
     if (!balanceElement) return;
     
-    balanceElement.textContent = newBalance;
+    // Обновляем отображение баланса
+    balanceElement.textContent = newBalance.toFixed(2);
     
-    // Обновляем данные пользователя
+    // Обновляем данные пользователя в localStorage
     const userData = localStorage.getItem('netlinkUser');
     if (userData) {
         const user = JSON.parse(userData);
@@ -184,10 +214,72 @@ function updateUserBalanceFromServer(newBalance) {
         localStorage.setItem('netlinkUser', JSON.stringify(user));
     }
     
-    // Обновляем статус баланса (если функция существует)
-    if (typeof updateBalanceStatus === 'function') {
-        updateBalanceStatus(newBalance);
+    // Обновляем статус баланса
+    updateBalanceStatus(newBalance);
+}
+
+function updateBalanceStatus(balance) {
+    const balanceStatus = document.querySelector('.balance-status');
+    if (!balanceStatus) return;
+    
+    // Обновляем текст в зависимости от баланса
+    if (balance >= 0) {
+        balanceStatus.innerHTML = `
+            <i class="fas fa-check-circle status-positive"></i>
+            <span>Баланс положительный</span>
+            <small>Услуги доступны</small>
+        `;
+    } else {
+        balanceStatus.innerHTML = `
+            <i class="fas fa-exclamation-triangle status-warning"></i>
+            <span>Баланс отрицательный</span>
+            <small>Требуется пополнение</small>
+        `;
     }
+}
+
+function showPaymentSuccess(amount, paymentMethod) {
+    // Создаем уведомление об успехе
+    const successNotification = document.createElement('div');
+    successNotification.className = 'payment-success card card--gradient';
+    successNotification.style.cssText = `
+        position: fixed;
+        top: 100px;
+        right: 20px;
+        z-index: 10001;
+        min-width: 300px;
+        animation: slideInRight 0.5s ease-out;
+    `;
+    
+    const paymentMethodsText = {
+        'card': 'Банковской картой',
+        'qiwi': 'QIWI Кошельком',
+        'yoomoney': 'ЮMoney'
+    };
+    
+    successNotification.innerHTML = `
+        <div class="success-content">
+            <i class="fas fa-check-circle"></i>
+            <div class="success-text">
+                <h4>Оплата прошла успешно! ✅</h4>
+                <p>Сумма: <strong>${amount} руб.</strong></p>
+                <p>Способ: ${paymentMethodsText[paymentMethod]}</p>
+                <small>Баланс обновлен</small>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(successNotification);
+    
+    // Автоматически скрываем через 5 секунд
+    setTimeout(() => {
+        successNotification.style.animation = 'slideOutRight 0.5s ease-in';
+        setTimeout(() => {
+            if (successNotification.parentNode) {
+                successNotification.parentNode.removeChild(successNotification);
+            }
+        }, 500);
+    }, 5000);
 }
 
 // Добавляем CSS стили для функционала баланса

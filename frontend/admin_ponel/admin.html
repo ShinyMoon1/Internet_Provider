@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetLink - Админ Панель</title>
+    <link rel="stylesheet" href="./style_admin.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Логин форма -->
+    <div id="loginModal" class="modal">
+        <div class="login-form">
+            <div class="login-header">
+                <h2><i class="fas fa-shield-alt"></i> Админ Панель</h2>
+                <p>NetLink Provider System</p>
+            </div>
+            <form id="adminLoginForm">
+                <div class="form-group">
+                    <label for="username">Логин:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Пароль:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Основной интерфейс -->
+    <div id="adminPanel" class="admin-panel" style="display: none;">
+        <!-- Header -->
+        <header class="admin-header">
+            <div class="header-left">
+                <div class="logo">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>NetLink Admin</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="admin-name" id="adminName">Администратор</span>
+                <button id="logoutBtn" class="btn btn-outline">
+                    <i class="fas fa-sign-out-alt"></i> Выйти
+                </button>
+            </div>
+        </header>
+
+        <!-- Sidebar -->
+        <nav class="admin-sidebar">
+            <ul class="sidebar-menu">
+                <li class="menu-item active" data-tab="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Дашборд</span>
+                </li>
+                <li class="menu-item" data-tab="users">
+                    <i class="fas fa-users"></i>
+                    <span>Пользователи</span>
+                </li>
+                <li class="menu-item" data-tab="payments">
+                    <i class="fas fa-credit-card"></i>
+                    <span>Платежи</span>
+                </li>
+                <li class="menu-item" data-tab="applications">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Заявки</span>
+                    <span class="badge" id="applicationsBadge">0</span>
+                </li>
+                <li class="menu-item" data-tab="tariffs">
+                    <i class="fas fa-bolt"></i>
+                    <span>Тарифы</span>
+                </li>
+                <li class="menu-item" data-tab="settings">
+                    <i class="fas fa-cog"></i>
+                    <span>Настройки</span>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="admin-content">
+            <!-- Дашборд -->
+            <div id="dashboard" class="tab-content active">
+                <div class="content-header">
+                    <h1><i class="fas fa-tachometer-alt"></i> Общая статистика</h1>
+                    <p>Обзор системы NetLink</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon users">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="totalUsers">0</h3>
+                            <p>Пользователей</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon payments">
+                            <i class="fas fa-credit-card"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="totalPayments">0</h3>
+                            <p>Платежей</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon revenue">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="totalRevenue">0 ₽</h3>
+                            <p>Общий доход</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon active">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="activeTariffs">0</h3>
+                            <p>Активных тарифов</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>Последние платежи</h3>
+                        <div class="chart-content">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Пользователь</th>
+                                        <th>Сумма</th>
+                                        <th>Метод</th>
+                                        <th>Дата</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentPayments">
+                                    <!-- Данные будут загружены через JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Новые пользователи</h3>
+                        <div class="chart-content">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Имя</th>
+                                        <th>Email</th>
+                                        <th>Баланс</th>
+                                        <th>Тариф</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentUsers">
+                                    <!-- Данные будут загружены через JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Пользователи -->
+            <div id="users" class="tab-content">
+                <div class="content-header">
+                    <h1><i class="fas fa-users"></i> Управление пользователями</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="showUserModal()">
+                            <i class="fas fa-plus"></i> Добавить пользователя
+                        </button>
+                    </div>
+                </div>
+
+                <div class="filters">
+                    <input type="text" id="userSearch" placeholder="Поиск пользователей..." class="search-input">
+                    <select id="userFilter" class="filter-select">
+                        <option value="all">Все пользователи</option>
+                        <option value="with_tariff">С тарифом</option>
+                        <option value="without_tariff">Без тарифа</option>
+                    </select>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Имя</th>
+                                <th>Email</th>
+                                <th>Телефон</th>
+                                <th>Баланс</th>
+                                <th>Тариф</th>
+                                <th>Статус</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTable">
+                            <!-- Данные будут загружены через JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Платежи -->
+            <div id="payments" class="tab-content">
+                <div class="content-header">
+                    <h1><i class="fas fa-credit-card"></i> История платежей</h1>
+                </div>
+
+                <div class="filters">
+                    <input type="text" id="paymentSearch" placeholder="Поиск платежей..." class="search-input">
+                    <select id="paymentFilter" class="filter-select">
+                        <option value="all">Все платежи</option>
+                        <option value="topup">Пополнения</option>
+                        <option value="tariff">Списания за тарифы</option>
+                    </select>
+                    <input type="date" id="paymentDate" class="filter-select">
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Пользователь</th>
+                                <th>Сумма</th>
+                                <th>Тип</th>
+                                <th>Метод</th>
+                                <th>Статус</th>
+                                <th>Дата</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="paymentsTable">
+                            <!-- Данные будут загружены через JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Заявки -->
+            <div id="applications" class="tab-content">
+                <div class="content-header">
+                    <h1><i class="fas fa-file-alt"></i> Заявки на подключение</h1>
+                </div>
+
+                <div class="filters">
+                    <select id="applicationFilter" class="filter-select">
+                        <option value="all">Все заявки</option>
+                        <option value="pending">В ожидании</option>
+                        <option value="approved">Одобренные</option>
+                        <option value="rejected">Отклоненные</option>
+                    </select>
+                </div>
+
+                <div class="applications-grid">
+                    <div id="applicationsList">
+                        <!-- Заявки будут загружены через JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Тарифы -->
+            <div id="tariffs" class="tab-content">
+                <div class="content-header">
+                    <h1><i class="fas fa-bolt"></i> Управление тарифами</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="showTariffModal()">
+                            <i class="fas fa-plus"></i> Добавить тариф
+                        </button>
+                    </div>
+                </div>
+
+                <div class="tariffs-grid">
+                    <div id="tariffsList">
+                        <!-- Тарифы будут загружены через JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Настройки -->
+            <div id="settings" class="tab-content">
+                <div class="content-header">
+                    <h1><i class="fas fa-cog"></i> Настройки системы</h1>
+                </div>
+
+                <div class="settings-grid">
+                    <div class="settings-card">
+                        <h3>Основные настройки</h3>
+                        <div class="setting-item">
+                            <label>Название компании:</label>
+                            <input type="text" id="companyName" value="NetLink" class="setting-input">
+                        </div>
+                        <div class="setting-item">
+                            <label>Email поддержки:</label>
+                            <input type="email" id="supportEmail" value="support@netlink.ru" class="setting-input">
+                        </div>
+                        <button class="btn btn-primary">Сохранить</button>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>Уведомления</h3>
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="emailNotifications" checked>
+                                Email уведомления
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="paymentNotifications" checked>
+                                Уведомления о платежах
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Модальные окна -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Добавить пользователя</h3>
+                <button class="close-btn" onclick="closeUserModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="userForm">
+                    <div class="form-group">
+                        <label>Имя:</label>
+                        <input type="text" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email:</label>
+                        <input type="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Телефон:</label>
+                        <input type="tel" name="phone" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Пароль:</label>
+                        <input type="password" name="password" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeUserModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="saveUser()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="./admin.js"></script>
+</body>
+</html>

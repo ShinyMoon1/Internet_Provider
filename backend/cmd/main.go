@@ -7,6 +7,7 @@ import (
 	"internet_provider/internal/app"
 	"internet_provider/internal/entity"
 	"internet_provider/internal/handler"
+	"internet_provider/internal/middleware"
 	"internet_provider/internal/repository"
 	"internet_provider/internal/service"
 	"internet_provider/internal/storage"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -32,6 +34,10 @@ func main() {
 		log.Fatal("Failed to migrate database:", err)
 	}
 
+	if err := createDefaultAdmin(db); err != nil {
+		log.Fatal("Failed to create default admin:", err)
+	}
+
 	appRepo := repository.NewGormApplicationRepository(db)
 	appService := service.NewApplicationService(appRepo)
 	pdfService := service.NewPDFService()
@@ -44,6 +50,11 @@ func main() {
 
 	paymenthandler := handler.NewPaymentHandler(paymentRepo)
 
+	adminRepo := repository.NewGormAdminRepository(db)
+	adminSevice := service.NewAdminService(adminRepo, "zGuui2cfiVi9yLCMiilfIEbCAVzkFkWA7OiShxxi4ML")
+	adminHandler := handler.NewAdminHandler(adminSevice)
+	adminAuth := middleware.AdminAuthMiddleware(adminSevice)
+
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://127.0.0.1:5500", "http://localhost:5500"},
@@ -53,7 +64,7 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
-	setupRouters(router, appHandler, authHandler, paymenthandler)
+	setupRouters(router, appHandler, authHandler, paymenthandler, adminHandler, adminAuth)
 
 	log.Printf("Server starting on port %s", cfg.Server.Port)
 	if err := router.Run(":" + cfg.Server.Port); err != nil {
@@ -77,6 +88,7 @@ func autoMigrate(db *gorm.DB) error {
 		&app.Application{},
 		&entity.User{},
 		&entity.Payment{},
+		&entity.Admin{},
 	}
 
 	for _, table := range tables {
@@ -91,7 +103,8 @@ func autoMigrate(db *gorm.DB) error {
 	return nil
 }
 
-func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler, authHandler *handler.AuthHandler, payHandler *handler.PaymentHandler) {
+func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler, authHandler *handler.AuthHandler,
+	payHandler *handler.PaymentHandler, adminHandler *handler.AdminHandler, adminAuth gin.HandlerFunc) {
 	api := router.Group("/api/v1")
 	{
 		applications := api.Group("/applications")
@@ -114,5 +127,56 @@ func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler, authH
 		{
 			pay.POST("/:id", payHandler.ToUpBalance)
 		}
+
+		admin := api.Group("/admin")
+		{
+			admin.POST("/login", adminHandler.Login)
+			admin.GET("/verify", adminHandler.VerifyToken)
+
+			authorized := admin.Group("")
+			authorized.Use(adminAuth)
+			{
+				authorized.GET("/dashboard", adminHandler.GetDashboard)
+				authorized.GET("/users", adminHandler.GetUsers)
+			}
+		}
 	}
+}
+
+func createDefaultAdmin(db *gorm.DB) error {
+	log.Println("🔄 Checking for default admin...")
+
+	var count int64
+	db.Model(&entity.Admin{}).Count(&count)
+	log.Printf("Current admins in DB: %d", count)
+
+	if count == 0 {
+		log.Println("📝 Creating default admin...")
+
+		// Хешируем пароль "admin123"
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+
+		admin := &entity.Admin{
+			Username: "admin",
+			Password: string(hashedPassword),
+			Email:    "admin@netlink.ru",
+			IsActive: true,
+		}
+
+		if err := db.Create(admin).Error; err != nil {
+			return err
+		}
+
+		log.Printf("✅ Default admin created successfully!")
+		log.Printf("👤 Username: admin")
+		log.Printf("🔑 Password: admin123")
+		log.Printf("📧 Email: %s", admin.Email)
+	} else {
+		log.Println("✅ Admin already exists in database")
+	}
+
+	return nil
 }

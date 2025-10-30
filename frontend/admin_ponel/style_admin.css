@@ -1,0 +1,479 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background: #f8f9fa;
+    color: #2c3e50;
+    line-height: 1.6;
+}
+
+/* Модальное окно логина */
+#loginModal {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    z-index: 10000;
+}
+
+.login-form {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 400px;
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.login-header h2 {
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+}
+
+.login-header p {
+    color: #7f8c8d;
+}
+
+/* Основной интерфейс админки */
+.admin-panel {
+    display: grid;
+    grid-template-areas: 
+        "header header"
+        "sidebar content";
+    grid-template-rows: 60px 1fr;
+    grid-template-columns: 250px 1fr;
+    min-height: 100vh;
+}
+
+/* Header */
+.admin-header {
+    grid-area: header;
+    background: white;
+    border-bottom: 1px solid #e1e5e9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-left .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.header-left .logo i {
+    color: #667eea;
+    font-size: 1.25rem;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.admin-name {
+    font-weight: 500;
+}
+
+/* Sidebar */
+.admin-sidebar {
+    grid-area: sidebar;
+    background: #2c3e50;
+    color: white;
+    padding: 1.5rem 0;
+}
+
+.sidebar-menu {
+    list-style: none;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.menu-item:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.menu-item.active {
+    background: #667eea;
+}
+
+.menu-item i {
+    width: 20px;
+    text-align: center;
+}
+
+.badge {
+    background: #e74c3c;
+    color: white;
+    border-radius: 10px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    margin-left: auto;
+}
+
+/* Content */
+.admin-content {
+    grid-area: content;
+    padding: 2rem;
+    overflow-y: auto;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.content-header {
+    margin-bottom: 2rem;
+}
+
+.content-header h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+    color: #2c3e50;
+}
+
+.content-header p {
+    color: #7f8c8d;
+}
+
+.header-actions {
+    margin-top: 1rem;
+}
+
+/* Статистика */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: transform 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+}
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+}
+
+.stat-icon.users { background: #3498db; }
+.stat-icon.payments { background: #9b59b6; }
+.stat-icon.revenue { background: #27ae60; }
+.stat-icon.active { background: #e74c3c; }
+
+.stat-info h3 {
+    font-size: 1.75rem;
+    margin-bottom: 0.25rem;
+}
+
+.stat-info p {
+    color: #7f8c8d;
+}
+
+/* Charts */
+.charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.chart-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+.chart-card h3 {
+    margin-bottom: 1rem;
+    color: #2c3e50;
+}
+
+/* Таблицы */
+.filters {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.search-input, .filter-select {
+    padding: 0.5rem 1rem;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.search-input:focus, .filter-select:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.table-container {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.data-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.data-table tr:hover {
+    background: #f8f9fa;
+}
+
+/* Кнопки */
+.btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-primary {
+    background: #667eea;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #5a6fd8;
+}
+
+.btn-secondary {
+    background: #95a5a6;
+    color: white;
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid #667eea;
+    color: #667eea;
+}
+
+.btn-outline:hover {
+    background: #667eea;
+    color: white;
+}
+
+/* Модальные окна */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e1e5e9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #7f8c8d;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    padding: 1.5rem;
+    border-top: 1px solid #e1e5e9;
+    text-align: right;
+}
+
+/* Формы */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    font-size: 1rem;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+/* Сетки для заявок и тарифов */
+.applications-grid,
+.tariffs-grid,
+.settings-grid {
+    display: grid;
+    gap: 1.5rem;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .admin-panel {
+        grid-template-areas: 
+            "header"
+            "content";
+        grid-template-columns: 1fr;
+    }
+    
+    .admin-sidebar {
+        display: none;
+    }
+    
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .filters {
+        flex-direction: column;
+    }
+}
+
+/* Анимации */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.tab-content.active {
+    animation: fadeIn 0.3s ease;
+}
+
+/* Статусы */
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.status-active { background: #d4edda; color: #155724; }
+.status-pending { background: #fff3cd; color: #856404; }
+.status-inactive { background: #f8d7da; color: #721c24; }
+
+/* Действия в таблицах */
+.table-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: background 0.3s ease;
+}
+
+.action-btn:hover {
+    background: #f8f9fa;
+}
+
+.action-btn.edit { color: #3498db; }
+.action-btn.delete { color: #e74c3c; }
+.action-btn.view { color: #27ae60; }
