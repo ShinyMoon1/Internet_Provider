@@ -66,9 +66,9 @@ func (r *GormAdminRepository) GetUsers(search string, filter string, page, limit
 
 	offset := (page - 1) * limit
 
-	err := query.Order("user.created_at DESC").Offset(offset).Limit(limit).Find(&users).Error
+	err := query.Order("users.created_at DESC").Offset(offset).Limit(limit).Find(&users).Error
 
-	if err != nil{
+	if err != nil {
 		return nil, 0, err
 	}
 	return users, total, nil

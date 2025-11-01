@@ -72,14 +72,6 @@
                     <span>Заявки</span>
                     <span class="badge" id="applicationsBadge">0</span>
                 </li>
-                <li class="menu-item" data-tab="tariffs">
-                    <i class="fas fa-bolt"></i>
-                    <span>Тарифы</span>
-                </li>
-                <li class="menu-item" data-tab="settings">
-                    <i class="fas fa-cog"></i>
-                    <span>Настройки</span>
-                </li>
             </ul>
         </nav>
 
@@ -271,64 +263,6 @@
                 </div>
             </div>
 
-            <!-- Тарифы -->
-            <div id="tariffs" class="tab-content">
-                <div class="content-header">
-                    <h1><i class="fas fa-bolt"></i> Управление тарифами</h1>
-                    <div class="header-actions">
-                        <button class="btn btn-primary" onclick="showTariffModal()">
-                            <i class="fas fa-plus"></i> Добавить тариф
-                        </button>
-                    </div>
-                </div>
-
-                <div class="tariffs-grid">
-                    <div id="tariffsList">
-                        <!-- Тарифы будут загружены через JS -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Настройки -->
-            <div id="settings" class="tab-content">
-                <div class="content-header">
-                    <h1><i class="fas fa-cog"></i> Настройки системы</h1>
-                </div>
-
-                <div class="settings-grid">
-                    <div class="settings-card">
-                        <h3>Основные настройки</h3>
-                        <div class="setting-item">
-                            <label>Название компании:</label>
-                            <input type="text" id="companyName" value="NetLink" class="setting-input">
-                        </div>
-                        <div class="setting-item">
-                            <label>Email поддержки:</label>
-                            <input type="email" id="supportEmail" value="support@netlink.ru" class="setting-input">
-                        </div>
-                        <button class="btn btn-primary">Сохранить</button>
-                    </div>
-
-                    <div class="settings-card">
-                        <h3>Уведомления</h3>
-                        <div class="setting-item">
-                            <label>
-                                <input type="checkbox" id="emailNotifications" checked>
-                                Email уведомления
-                            </label>
-                        </div>
-                        <div class="setting-item">
-                            <label>
-                                <input type="checkbox" id="paymentNotifications" checked>
-                                Уведомления о платежах
-                            </label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-    </div>
-
     <!-- Модальные окна -->
     <div id="userModal" class="modal">
         <div class="modal-content">
@@ -364,5 +298,6 @@
     </div>
 
     <script src="./admin.js"></script>
+    <script src="./auth.js"></script>
 </body>
 </html>

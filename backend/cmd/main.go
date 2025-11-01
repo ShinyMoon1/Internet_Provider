@@ -88,6 +88,7 @@ func autoMigrate(db *gorm.DB) error {
 		&app.Application{},
 		&entity.User{},
 		&entity.Payment{},
+		&entity.Tariff{},
 		&entity.Admin{},
 	}
 
@@ -132,6 +133,7 @@ func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler, authH
 		{
 			admin.POST("/login", adminHandler.Login)
 			admin.GET("/verify", adminHandler.VerifyToken)
+			admin.POST("/debug-token", adminHandler.DebugToken)
 
 			authorized := admin.Group("")
 			authorized.Use(adminAuth)
@@ -153,7 +155,6 @@ func createDefaultAdmin(db *gorm.DB) error {
 	if count == 0 {
 		log.Println("📝 Creating default admin...")
 
-		// Хешируем пароль "admin123"
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
 		if err != nil {
 			return err

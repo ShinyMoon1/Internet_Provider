@@ -34,12 +34,13 @@ type DashboardList struct {
 }
 
 type AdminUserList struct {
-	ID            int64   `json:"id"`
-	Name          string  `json:"name"`
-	Email         string  `json:"email"`
-	Phone         string  `json:"phone"`
-	AccountNumber string  `json:"account_number"`
-	Balance       float64 `json:"balance"`
-	TariffID      *int64  `json:"tariff_id"`
-	TariffName    *string `json:"tariff_name"`
+	ID            int64     `json:"id"`
+	Name          string    `json:"name"`
+	Email         string    `json:"email"`
+	Phone         string    `json:"phone"`
+	AccountNumber string    `json:"account_number"`
+	Balance       float64   `json:"balance"`
+	TariffID      *int64    `json:"tariff_id"`
+	TariffName    *string   `json:"tariff_name"`
+	CreatedAt     time.Time `json:"created_at,omitempty"`
 }
