@@ -1,354 +1,585 @@
-// admin.js
-
-// Перенесем инициализацию сюда чтобы она была глобальной
-window.initializeAdminPanel = async function() {
-    try {
-        console.log('🚀 Initializing admin panel...');
-
-        // Обновляем информацию о администраторе
-        updateAdminInfo();
-        
-        // Загружаем начальные данные
-        await loadInitialData();
-        
-        // Настраиваем обработчики событий
-        setupEventListeners();
-
-        console.log('✅ Admin panel initialized successfully');
-        
-    } catch (error) {
-        console.error('❌ Admin panel initialization failed:', error);
+// admin.js - ИСПРАВЛЕННЫЙ ДАШБОРД
+class AdminAPI {
+    constructor() {
+        this.baseUrl = 'http://localhost:8080/api/v1/admin';
     }
-};
 
-function updateAdminInfo() {
-    const adminNameElement = document.getElementById('adminName');
-    if (adminNameElement && window.authService.adminData) {
-        adminNameElement.textContent = window.authService.adminData.username;
-        console.log('✅ Admin info updated:', window.authService.adminData.username);
+    async getUsers(search = '', filter = 'all', page = 1, limit = 20) {
+        try {
+            if (!window.authService || !window.authService.token) {
+                throw new Error('Не авторизован');
+            }
+            
+            const token = window.authService.token;
+            
+            const params = new URLSearchParams();
+            if (search) params.append('search', search);
+            if (filter && filter !== 'all') params.append('filter', filter);
+            params.append('page', page);
+            params.append('limit', limit);
+            
+            const url = `${this.baseUrl}/users?${params.toString()}`;
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Ошибка сервера: ${response.status}`);
+            }
+            
+            return await response.json();
+            
+        } catch (error) {
+            console.error('Ошибка при загрузке пользователей:', error);
+            throw error;
+        }
+    }
+
+    async getDashboardStats() {
+        try {
+            if (!window.authService || !window.authService.token) {
+                throw new Error('Не авторизован');
+            }
+            
+            const token = window.authService.token;
+            const response = await fetch(`${this.baseUrl}/dashboard`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Ошибка: ${response.status}`);
+            }
+            
+            return await response.json();
+            
+        } catch (error) {
+            console.error('Ошибка дашборда:', error);
+            throw error;
+        }
+    }
+
+    async getAllPayments() {
+        try {
+            if (!window.authService || !window.authService.token) {
+                throw new Error('Не авторизован');
+            }
+            
+            const token = window.authService.token;
+            const response = await fetch(`${this.baseUrl}/payments?limit=1000`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Ошибка: ${response.status}`);
+            }
+            
+            return await response.json();
+            
+        } catch (error) {
+            console.error('Ошибка загрузки платежей:', error);
+            throw error;
+        }
+    }
+
+    async getAllUsers() {
+        try {
+            if (!window.authService || !window.authService.token) {
+                throw new Error('Не авторизован');
+            }
+            
+            const token = window.authService.token;
+            const response = await fetch(`${this.baseUrl}/users?limit=1000`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Ошибка: ${response.status}`);
+            }
+            
+            return await response.json();
+            
+        } catch (error) {
+            console.error('Ошибка загрузки пользователей:', error);
+            throw error;
+        }
     }
 }
 
-async function loadInitialData() {
+class AdminUI {
+    constructor() {
+        this.api = new AdminAPI();
+    }
+
+    async loadDashboard() {
+        try {
+            console.log('📊 Загружаем дашборд...');
+            
+            // Загружаем статистику с API
+            const stats = await this.api.getDashboardStats();
+            console.log('📈 Статистика API:', stats);
+            
+            // Показываем базовую статистику
+            this.updateElement('totalUsers', stats.total_users || 0);
+            this.updateElement('totalPayments', stats.total_payments || 0);
+            this.updateElement('totalRevenue', `${stats.total_revenue || 0} ₽`);
+            this.updateElement('activeTariffs', stats.active_tariffs || 0);
+            
+            // Если статистика пустая или неполная, рассчитываем сами
+            if (!stats.total_payments || !stats.total_revenue || !stats.active_tariffs) {
+                console.log('⚠️ Статистика неполная, загружаем детальные данные...');
+                await this.calculateDetailedStats();
+            }
+            
+            // Загружаем последние платежи
+            await this.loadRecentPayments();
+            
+            // Загружаем новых пользователей
+            await this.loadRecentUsers();
+            
+        } catch (error) {
+            console.error('Ошибка дашборда:', error);
+            
+            // Показываем заглушки и пытаемся рассчитать вручную
+            this.updateElement('totalUsers', '0');
+            this.updateElement('totalPayments', '0');
+            this.updateElement('totalRevenue', '0 ₽');
+            this.updateElement('activeTariffs', '0');
+            
+            // Пробуем загрузить данные для расчета
+            try {
+                await this.calculateDetailedStats();
+            } catch (calcError) {
+                console.error('Не удалось рассчитать статистику:', calcError);
+            }
+        }
+    }
+
+    async calculateDetailedStats() {
+        try {
+            console.log('🧮 Рассчитываем детальную статистику...');
+            
+            // Загружаем все платежи
+            const paymentsData = await this.api.getAllPayments();
+            const allPayments = paymentsData.payments || paymentsData.data || [];
+            console.log(`📊 Всего платежей в системе: ${allPayments.length}`);
+            
+            // Рассчитываем общее количество платежей
+            const totalPayments = allPayments.length;
+            
+            // Рассчитываем общий доход (сумма всех платежей)
+            const totalRevenue = allPayments.reduce((sum, payment) => {
+                return sum + (parseFloat(payment.amount) || 0);
+            }, 0);
+            
+            // Загружаем всех пользователей для подсчета активных тарифов
+            const usersData = await this.api.getAllUsers();
+            const allUsers = usersData.user || usersData.users || [];
+            
+            // Подсчитываем активные тарифы
+            const activeTariffs = allUsers.filter(user => {
+                // Проверяем наличие тарифа
+                return user.tariff_id || 
+                       user.tariff_active || 
+                       user.active_tariff || 
+                       user.tariff_name;
+            }).length;
+            
+            console.log('📈 Рассчитанная статистика:', {
+                totalPayments,
+                totalRevenue,
+                activeTariffs,
+                totalUsers: allUsers.length
+            });
+            
+            // Обновляем данные на дашборде
+            this.updateElement('totalPayments', totalPayments);
+            this.updateElement('totalRevenue', `${Math.round(totalRevenue)} ₽`);
+            this.updateElement('activeTariffs', activeTariffs);
+            this.updateElement('totalUsers', allUsers.length);
+            
+        } catch (error) {
+            console.error('Ошибка расчета статистики:', error);
+            throw error;
+        }
+    }
+
+    async loadRecentPayments() {
+        try {
+            const data = await this.api.getAllPayments();
+            const payments = data.payments || [];
+            
+            // Берем 5 последних платежей
+            const recentPayments = payments
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                .slice(0, 5);
+            
+            const tableBody = document.getElementById('recentPayments');
+            if (!tableBody) return;
+            
+            let html = '';
+            
+            if (recentPayments.length === 0) {
+                html = `
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 20px; color: #666;">
+                            <i class="fas fa-credit-card"></i>
+                            <div>Нет платежей</div>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                recentPayments.forEach(payment => {
+                    const userName = payment.user_name || 
+                                   (payment.user_id ? `Пользователь #${payment.user_id}` : 'Неизвестно');
+                    const amount = payment.amount || 0;
+                    const method = this.formatPaymentMethod(payment.payment_method);
+                    const date = payment.created_at ? 
+                        new Date(payment.created_at).toLocaleDateString('ru-RU') : '-';
+                    
+                    html += `
+                        <tr>
+                            <td>
+                                <div style="font-weight: 500;">${userName}</div>
+                                <small style="color: #666;">ID: ${payment.user_id || '?'}</small>
+                            </td>
+                            <td>
+                                <span class="amount positive">
+                                    ${amount} ₽
+                                </span>
+                            </td>
+                            <td>${date}</td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            tableBody.innerHTML = html;
+            
+        } catch (error) {
+            console.error('Ошибка загрузки последних платежей:', error);
+            const tableBody = document.getElementById('recentPayments');
+            if (tableBody) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 20px; color: #666;">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>Не удалось загрузить</div>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+    }
+
+    async loadRecentUsers() {
+        try {
+            const data = await this.api.getAllUsers();
+            const allUsers = data.user || data.users || [];
+            
+            // Берем 5 последних пользователей
+            const recentUsers = allUsers
+                .sort((a, b) => {
+                    // Сортируем по дате создания или по ID (новые сначала)
+                    const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+                    const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+                    if (dateA.getTime() === dateB.getTime()) {
+                        return (b.id || 0) - (a.id || 0); // По ID если нет даты
+                    }
+                    return dateB - dateA;
+                })
+                .slice(0, 5);
+            
+            const tableBody = document.getElementById('recentUsers');
+            if (!tableBody) return;
+            
+            let html = '';
+            
+            if (recentUsers.length === 0) {
+                html = `
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 20px; color: #666;">
+                            <i class="fas fa-users"></i>
+                            <div>Нет пользователей</div>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                recentUsers.forEach(user => {
+                    const userName = user.name || user.username || `Пользователь #${user.id}`;
+                    const email = user.email || 'Не указан';
+                    const balance = user.balance || 0;
+                    const tariff = user.tariff_name || user.tariff || 'Без тарифа';
+                    
+                    html += `
+                        <tr>
+                            <td>
+                                <div style="font-weight: 500;">${userName}</div>
+                                <small style="color: #666;">ID: ${user.id}</small>
+                            </td>
+                            <td>${email}</td>
+                            <td>${balance} ₽</td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            tableBody.innerHTML = html;
+            
+        } catch (error) {
+            console.error('Ошибка загрузки новых пользователей:', error);
+            const tableBody = document.getElementById('recentUsers');
+            if (tableBody) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 20px; color: #666;">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>Не удалось загрузить</div>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+    }
+
+    formatPaymentMethod(method) {
+        if (!method) return 'Не указан';
+        
+        const methods = {
+            'card': '💳 Карта',
+            'cash': '💵 Наличные',
+            'transfer': '🏦 Перевод',
+            'online': '🌐 Онлайн'
+        };
+        
+        return methods[method] || method;
+    }
+
+    updateElement(id, value) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = value;
+        }
+    }
+
+    // Остальные методы остаются без изменений...
+    async loadUsers(search = '', filter = 'all', page = 1) {
+        const tableBody = document.getElementById('usersTable');
+        if (!tableBody) {
+            console.error('Не найден usersTable');
+            return;
+        }
+        
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 20px;">
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 10px;"></i>
+                        <span>Загрузка пользователей...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        
+        try {
+            const data = await this.api.getUsers(search, filter, page, 20);
+            const usersArray = data.user || data.users || [];
+            
+            if (usersArray.length === 0) {
+                this.showNoUsers();
+                return;
+            }
+            
+            this.renderUsersTable(usersArray);
+            
+        } catch (error) {
+            console.error('Ошибка загрузки:', error);
+            this.showError('Не удалось загрузить пользователей: ' + error.message);
+        }
+    }
+
+    renderUsersTable(users) {
+        const tableBody = document.getElementById('usersTable');
+        if (!tableBody) return;
+        
+        let html = '';
+        
+        users.forEach(user => {
+            const userName = user.name || user.username || user.full_name || 'Не указано';
+            const hasTariff = user.tariff_id || user.tariff_name || user.tariff;
+            const tariffName = user.tariff_name || user.tariff || 'Без тарифа';
+            const isActive = user.tariff_active || user.active_tariff || user.tariff_id;
+            
+            html += `
+                <tr>
+                    <td>${user.id || '-'}</td>
+                    <td>
+                        <div style="font-weight: 500;">${this.escapeHtml(userName)}</div>
+                        ${user.email ? `<small style="color: #666;">${user.email}</small>` : ''}
+                    </td>
+                    <td>${user.phone || user.phone_number || '-'}</td>
+                    <td>
+                        <span class="amount ${(user.balance || 0) >= 0 ? 'positive' : 'negative'}">
+                            ${user.balance || 0} ₽
+                        </span>
+                    </td>
+                    <td>${tariffName}</td>
+                    <td>
+                        <span class="status-badge ${isActive ? 'status-active' : 'status-inactive'}">
+                            ${isActive ? 'Активен' : 'Неактивен'}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        tableBody.innerHTML = html;
+    }
+
+    showNoUsers() {
+        const tableBody = document.getElementById('usersTable');
+        if (!tableBody) return;
+        
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 40px;">
+                    <i class="fas fa-users-slash" style="font-size: 48px; color: #ccc; margin-bottom: 15px;"></i>
+                    <h3 style="margin: 0 0 10px 0; color: #666;">Пользователи не найдены</h3>
+                </td>
+            </tr>
+        `;
+    }
+
+    showError(message) {
+        const tableBody = document.getElementById('usersTable');
+        if (!tableBody) return;
+        
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 40px; color: #dc3545;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Ошибка</h3>
+                    <p>${message}</p>
+                </td>
+            </tr>
+        `;
+    }
+
+    escapeHtml(text) {
+        if (text === null || text === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+}
+
+// Инициализация и остальной код остается без изменений...
+window.adminUI = new AdminUI();
+
+window.initializeAdminPanel = async function() {
+    console.log('🚀 Инициализация админ-панели...');
+    
     try {
-        console.log('📥 Loading initial data...');
+        // Обновляем имя администратора
+        const adminName = document.getElementById('adminName');
+        if (adminName && window.authService && window.authService.adminData) {
+            adminName.textContent = window.authService.adminData.username || 'Администратор';
+        }
         
         // Загружаем данные для активной вкладки
         const activeTab = document.querySelector('.tab-content.active');
-        if (activeTab) {
-            await loadTabData(activeTab.id);
+        if (activeTab && activeTab.id === 'dashboard') {
+            await adminUI.loadDashboard();
         }
         
+        setupEventListeners();
+        
+        console.log('✅ Админ-панель инициализирована');
+        
     } catch (error) {
-        console.error('❌ Initial data loading failed:', error);
+        console.error('❌ Ошибка инициализации:', error);
     }
-}
+};
 
-async function loadTabData(tabId) {
-    console.log(`📊 Loading data for tab: ${tabId}`);
-    
-    switch (tabId) {
-        case 'dashboard':
-            if (window.adminUI) {
-                await window.adminUI.updateDashboard();
-            }
-            break;
-        case 'users':
-            if (window.adminUI) {
-                await window.adminUI.updateUsersTable();
-            }
-            break;
-        default:
-            console.log(`ℹ️ No data loader for tab: ${tabId}`);
-    }
-}
 function setupEventListeners() {
-    console.log('🔧 Setting up event listeners...');
-    
-    // Обработчики меню
     document.querySelectorAll('.menu-item').forEach(item => {
         item.addEventListener('click', function() {
             const tabName = this.getAttribute('data-tab');
-            console.log(`🎯 Switching to tab: ${tabName}`);
             switchTab(tabName);
         });
     });
-
-    // Поиск пользователей
+    
     const userSearch = document.getElementById('userSearch');
     if (userSearch) {
-        userSearch.addEventListener('input', debounce(async function() {
-            console.log('🔍 User search:', this.value);
-            await window.adminUI.updateUsersTable(this.value);
-        }, 300));
+        userSearch.addEventListener('input', debounce(function() {
+            adminUI.loadUsers(this.value, document.getElementById('userFilter')?.value || 'all');
+        }, 500));
     }
-
-    // Фильтр пользователей
+    
     const userFilter = document.getElementById('userFilter');
     if (userFilter) {
-        userFilter.addEventListener('change', async function() {
-            console.log('🎛️ User filter:', this.value);
-            await window.adminUI.updateUsersTable('', this.value);
+        userFilter.addEventListener('change', function() {
+            adminUI.loadUsers(userSearch?.value || '', this.value);
         });
     }
-
-    // Выход из системы
+    
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', function() {
-            console.log('🚪 Logging out...');
             window.authService.logout();
         });
     }
-
-    console.log('✅ Event listeners setup complete');
 }
 
-// Утилиты
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-// Переключение вкладок
 async function switchTab(tabName) {
-    console.log(`🔄 Switching to tab: ${tabName}`);
-    
     document.querySelectorAll('.menu-item').forEach(item => {
         item.classList.remove('active');
     });
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
     });
-
+    
     const menuItem = document.querySelector(`[data-tab="${tabName}"]`);
     const tabContent = document.getElementById(tabName);
     
     if (menuItem && tabContent) {
         menuItem.classList.add('active');
         tabContent.classList.add('active');
-        await loadTabData(tabName);
-    } else {
-        console.error(`❌ Tab elements not found for: ${tabName}`);
+        
+        if (tabName === 'users') {
+            await adminUI.loadUsers();
+        } else if (tabName === 'dashboard') {
+            await adminUI.loadDashboard();
+        } else if (tabName === 'payments') {
+            if (window.paymentsUI) {
+                await paymentsUI.loadPayments();
+            }
+        }
     }
 }
 
-// Глобальные функции для HTML onclick
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
 window.switchTab = switchTab;
-
-// Заглушки для модальных окон
-window.showUserModal = function() {
-    alert('Добавление пользователя - функция в разработке');
-};
-
-window.closeUserModal = function() {
-    console.log('Close user modal');
-};
-
-window.saveUser = function() {
-    alert('Сохранение пользователя - функция в разработке');
-};
-
-window.showTariffModal = function() {
-    alert('Добавление тарифа - функция в разработке');
-};
-
-// admin.js
-class AdminAPI {
-    constructor() {
-        // Не инициализируем authService здесь, будем получать его при вызове методов
-    }
-
-    getAuthService() {
-        if (!window.authService) {
-            throw new Error('AuthService not available');
-        }
-        return window.authService;
-    }
-
-    async getDashboardStats() {
-        try {
-            console.log('📊 Fetching dashboard stats...');
-            
-            const response = await fetch(`http://localhost:8080/api/v1/admin/dashboard`, {
-                headers: this.getAuthService().getAuthHeaders()
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            console.log('✅ Dashboard data:', data);
-            return data;
-        } catch (error) {
-            console.error('❌ Dashboard error:', error);
-            throw error;
-        }
-    }
-
-    async getUsers(params = {}) {
-        try {
-            console.log('👥 Fetching users...', params);
-            
-            const queryString = new URLSearchParams(params).toString();
-            const url = `http://localhost:8080/api/v1/admin/users${queryString ? `?${queryString}` : ''}`;
-
-            const response = await fetch(url, {
-                headers: this.getAuthService().getAuthHeaders()
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            console.log('✅ Users data:', data);
-            return data;
-        } catch (error) {
-            console.error('❌ Users error:', error);
-            throw error;
-        }
-    }
-}
-
-class UIManager {
-    constructor() {
-        this.adminAPI = new AdminAPI();
-    }
-
-    async updateDashboard() {
-        try {
-            console.log('🔄 Updating dashboard...');
-            
-            // Проверим доступность authService
-            if (!window.authService || !window.authService.getAuthHeaders) {
-                throw new Error('AuthService not ready');
-            }
-            
-            const stats = await this.adminAPI.getDashboardStats();
-            
-            this.updateElement('totalUsers', stats.total_users || 0);
-            this.updateElement('totalPayments', stats.total_payments || 0);
-            this.updateElement('totalRevenue', `${stats.total_revenue || 0} ₽`);
-            this.updateElement('activeTariffs', stats.active_tariffs || 0);
-            
-            console.log('✅ Dashboard updated successfully');
-            
-        } catch (error) {
-            console.error('❌ Dashboard update failed:', error);
-            this.showError('Ошибка загрузки дашборда: ' + error.message);
-        }
-    }
-
-    async updateUsersTable(search = '', filter = 'all', page = 1) {
-        try {
-            console.log('🔄 Updating users table...');
-            
-            // Проверим доступность authService
-            if (!window.authService || !window.authService.getAuthHeaders) {
-                throw new Error('AuthService not ready');
-            }
-            
-            const params = { search, filter, page, limit: 20 };
-            const data = await this.adminAPI.getUsers(params);
-            
-            this.renderUsersTable(data.users || []);
-            console.log('✅ Users table updated successfully');
-            
-        } catch (error) {
-            console.error('❌ Users table update failed:', error);
-            this.showError('Ошибка загрузки пользователей: ' + error.message);
-        }
-    }
-
-    renderUsersTable(users) {
-        const tbody = document.getElementById('usersTable');
-        if (!tbody) {
-            console.warn('⚠️ usersTable element not found');
-            return;
-        }
-
-        if (users.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="8" style="text-align: center; padding: 2rem;">
-                        <i class="fas fa-users" style="font-size: 3rem; color: #ccc; margin-bottom: 1rem;"></i>
-                        <p>Пользователи не найдены</p>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        tbody.innerHTML = users.map(user => `
-            <tr>
-                <td>${user.id}</td>
-                <td>${this.escapeHtml(user.name || 'Не указано')}</td>
-                <td>${this.escapeHtml(user.email || 'Не указано')}</td>
-                <td>${user.phone || '-'}</td>
-                <td>${user.balance || 0} ₽</td>
-                <td>${user.tariff_name || 'Не активирован'}</td>
-                <td>
-                    <span class="status-badge ${user.tariff_id ? 'status-active' : 'status-inactive'}">
-                        ${user.tariff_id ? 'Активен' : 'Неактивен'}
-                    </span>
-                </td>
-                <td>
-                    <div class="table-actions">
-                        <button class="action-btn edit" onclick="adminUI.editUser(${user.id})" title="Редактировать">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="action-btn view" onclick="adminUI.viewUser(${user.id})" title="Просмотр">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
-    }
-
-    updateElement(elementId, value) {
-        const element = document.getElementById(elementId);
-        if (element) {
-            element.textContent = value;
-        } else {
-            console.warn(`⚠️ Element #${elementId} not found`);
-        }
-    }
-
-    showError(message) {
-        console.error('💥 UI Error:', message);
-        alert(message);
-    }
-
-    escapeHtml(unsafe) {
-        if (unsafe === null || unsafe === undefined) return '';
-        return String(unsafe)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
-
-    editUser(userId) {
-        console.log('Edit user:', userId);
-        alert(`Редактирование пользователя ${userId} - функция в разработке`);
-    }
-
-    viewUser(userId) {
-        console.log('View user:', userId);
-        alert(`Просмотр пользователя ${userId} - функция в разработке`);
-    }
-}
-
-// Создаем глобальный экземпляр
-window.adminUI = new UIManager();

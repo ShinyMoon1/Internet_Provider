@@ -140,6 +140,7 @@ func setupRouters(router *gin.Engine, handler *handler.ApplicationHandler, authH
 			{
 				authorized.GET("/dashboard", adminHandler.GetDashboard)
 				authorized.GET("/users", adminHandler.GetUsers)
+				authorized.GET("/payments", payHandler.GetPayments)
 			}
 		}
 	}
