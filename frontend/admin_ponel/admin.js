@@ -125,6 +125,7 @@ class AdminAPI {
 class AdminUI {
     constructor() {
         this.api = new AdminAPI();
+        this.allUsers = []; // Кэш пользователей для поиска
     }
 
     async loadDashboard() {
@@ -147,7 +148,10 @@ class AdminUI {
                 await this.calculateDetailedStats();
             }
             
-            // Загружаем последние платежи
+            // Загружаем пользователей для отображения имен
+            await this.loadUsersForDashboard();
+            
+            // Загружаем последние платежи с именами пользователей
             await this.loadRecentPayments();
             
             // Загружаем новых пользователей
@@ -156,7 +160,7 @@ class AdminUI {
         } catch (error) {
             console.error('Ошибка дашборда:', error);
             
-            // Показываем заглушки и пытаемся рассчитать вручную
+            // Показываем заглушки
             this.updateElement('totalUsers', '0');
             this.updateElement('totalPayments', '0');
             this.updateElement('totalRevenue', '0 ₽');
@@ -169,6 +173,32 @@ class AdminUI {
                 console.error('Не удалось рассчитать статистику:', calcError);
             }
         }
+    }
+
+    async loadUsersForDashboard() {
+        try {
+            console.log('👥 Загружаем пользователей для дашборда...');
+            const data = await this.api.getAllUsers();
+            this.allUsers = data.user || data.users || [];
+            console.log(`✅ Загружено ${this.allUsers.length} пользователей для дашборда`);
+        } catch (error) {
+            console.error('Ошибка загрузки пользователей для дашборда:', error);
+            this.allUsers = [];
+        }
+    }
+
+    // Найти пользователя по ID
+    findUserById(userId) {
+        if (!this.allUsers.length) return null;
+        return this.allUsers.find(user => user.id == userId);
+    }
+
+    // Получить имя пользователя по ID
+    getUserNameById(userId) {
+        const user = this.findUserById(userId);
+        if (!user) return `Пользователь #${userId}`;
+        
+        return user.name || user.username || user.full_name || `Пользователь #${userId}`;
     }
 
     async calculateDetailedStats() {
@@ -189,11 +219,13 @@ class AdminUI {
             }, 0);
             
             // Загружаем всех пользователей для подсчета активных тарифов
-            const usersData = await this.api.getAllUsers();
-            const allUsers = usersData.user || usersData.users || [];
+            if (this.allUsers.length === 0) {
+                const usersData = await this.api.getAllUsers();
+                this.allUsers = usersData.user || usersData.users || [];
+            }
             
             // Подсчитываем активные тарифы
-            const activeTariffs = allUsers.filter(user => {
+            const activeTariffs = this.allUsers.filter(user => {
                 // Проверяем наличие тарифа
                 return user.tariff_id || 
                        user.tariff_active || 
@@ -205,14 +237,14 @@ class AdminUI {
                 totalPayments,
                 totalRevenue,
                 activeTariffs,
-                totalUsers: allUsers.length
+                totalUsers: this.allUsers.length
             });
             
             // Обновляем данные на дашборде
             this.updateElement('totalPayments', totalPayments);
             this.updateElement('totalRevenue', `${Math.round(totalRevenue)} ₽`);
             this.updateElement('activeTariffs', activeTariffs);
-            this.updateElement('totalUsers', allUsers.length);
+            this.updateElement('totalUsers', this.allUsers.length);
             
         } catch (error) {
             console.error('Ошибка расчета статистики:', error);
@@ -222,8 +254,22 @@ class AdminUI {
 
     async loadRecentPayments() {
         try {
-            const data = await this.api.getAllPayments();
-            const payments = data.payments || [];
+            // Загружаем все платежи
+            const paymentsData = await this.api.getAllPayments();
+            const payments = paymentsData.payments || [];
+            
+            // Загружаем всех пользователей для получения имен
+            const usersData = await this.api.getAllUsers();
+            const allUsers = usersData.user || usersData.users || [];
+            
+            // Создаем мап пользователей по ID для быстрого поиска
+            const usersMap = {};
+            allUsers.forEach(user => {
+                usersMap[user.id] = {
+                    name: user.name || user.username || `Пользователь #${user.id}`,
+                    email: user.email || ''
+                };
+            });
             
             // Берем 5 последних платежей
             const recentPayments = payments
@@ -246,10 +292,11 @@ class AdminUI {
                 `;
             } else {
                 recentPayments.forEach(payment => {
-                    const userName = payment.user_name || 
-                                   (payment.user_id ? `Пользователь #${payment.user_id}` : 'Неизвестно');
+                    // Получаем пользователя из мапа
+                    const user = usersMap[payment.user_id];
+                    const userName = user ? user.name : 
+                                (payment.user_id ? `Пользователь #${payment.user_id}` : 'Неизвестно');
                     const amount = payment.amount || 0;
-                    const method = this.formatPaymentMethod(payment.payment_method);
                     const date = payment.created_at ? 
                         new Date(payment.created_at).toLocaleDateString('ru-RU') : '-';
                     
@@ -286,15 +333,17 @@ class AdminUI {
                 `;
             }
         }
-    }
+}
 
     async loadRecentUsers() {
         try {
-            const data = await this.api.getAllUsers();
-            const allUsers = data.user || data.users || [];
+            if (this.allUsers.length === 0) {
+                const data = await this.api.getAllUsers();
+                this.allUsers = data.user || data.users || [];
+            }
             
             // Берем 5 последних пользователей
-            const recentUsers = allUsers
+            const recentUsers = [...this.allUsers]
                 .sort((a, b) => {
                     // Сортируем по дате создания или по ID (новые сначала)
                     const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
@@ -314,7 +363,7 @@ class AdminUI {
             if (recentUsers.length === 0) {
                 html = `
                     <tr>
-                        <td colspan="4" style="text-align: center; padding: 20px; color: #666;">
+                        <td colspan="3" style="text-align: center; padding: 20px; color: #666;">
                             <i class="fas fa-users"></i>
                             <div>Нет пользователей</div>
                         </td>
@@ -325,16 +374,23 @@ class AdminUI {
                     const userName = user.name || user.username || `Пользователь #${user.id}`;
                     const email = user.email || 'Не указан';
                     const balance = user.balance || 0;
-                    const tariff = user.tariff_name || user.tariff || 'Без тарифа';
                     
                     html += `
                         <tr>
                             <td>
-                                <div style="font-weight: 500;">${userName}</div>
+                                <div style="font-weight: 500;">${this.escapeHtml(userName)}</div>
                                 <small style="color: #666;">ID: ${user.id}</small>
                             </td>
-                            <td>${email}</td>
-                            <td>${balance} ₽</td>
+                            <td>
+                                ${email}
+                                ${user.phone ? `<br><small style="color: #666;">📱 ${user.phone}</small>` : ''}
+                            </td>
+                            <td>
+                                <span style="color: ${balance >= 0 ? '#28a745' : '#dc3545'}; font-weight: bold;">
+                                    ${balance} ₽
+                                </span>
+                                <br>
+                            </td>
                         </tr>
                     `;
                 });
@@ -348,7 +404,7 @@ class AdminUI {
             if (tableBody) {
                 tableBody.innerHTML = `
                     <tr>
-                        <td colspan="4" style="text-align: center; padding: 20px; color: #666;">
+                        <td colspan="3" style="text-align: center; padding: 20px; color: #666;">
                             <i class="fas fa-exclamation-circle"></i>
                             <div>Не удалось загрузить</div>
                         </td>
@@ -378,7 +434,6 @@ class AdminUI {
         }
     }
 
-    // Остальные методы остаются без изменений...
     async loadUsers(search = '', filter = 'all', page = 1) {
         const tableBody = document.getElementById('usersTable');
         if (!tableBody) {
@@ -439,7 +494,6 @@ class AdminUI {
                             ${user.balance || 0} ₽
                         </span>
                     </td>
-                    <td>${tariffName}</td>
                     <td>
                         <span class="status-badge ${isActive ? 'status-active' : 'status-inactive'}">
                             ${isActive ? 'Активен' : 'Неактивен'}
@@ -489,7 +543,7 @@ class AdminUI {
     }
 }
 
-// Инициализация и остальной код остается без изменений...
+// Глобальный экземпляр
 window.adminUI = new AdminUI();
 
 window.initializeAdminPanel = async function() {
@@ -567,8 +621,8 @@ async function switchTab(tabName) {
         } else if (tabName === 'dashboard') {
             await adminUI.loadDashboard();
         } else if (tabName === 'payments') {
-            if (window.paymentsUI) {
-                await paymentsUI.loadPayments();
+            if (window.loadPaymentsTab) {
+                await loadPaymentsTab();
             }
         }
     }

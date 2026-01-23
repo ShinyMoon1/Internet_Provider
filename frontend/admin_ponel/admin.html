@@ -67,11 +67,6 @@
                     <i class="fas fa-credit-card"></i>
                     <span>Платежи</span>
                 </li>
-                <li class="menu-item" data-tab="applications">
-                    <i class="fas fa-file-alt"></i>
-                    <span>Заявки</span>
-                    <span class="badge" id="applicationsBadge">0</span>
-                </li>
             </ul>
         </nav>
 
@@ -165,11 +160,6 @@
             <div id="users" class="tab-content">
                 <div class="content-header">
                     <h1><i class="fas fa-users"></i> Управление пользователями</h1>
-                    <div class="header-actions">
-                        <button class="btn btn-primary" onclick="showUserModal()">
-                            <i class="fas fa-plus"></i> Добавить пользователя
-                        </button>
-                    </div>
                 </div>
 
                 <div class="filters">
@@ -187,7 +177,6 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Имя</th>
-                                <th>Email</th>
                                 <th>Телефон</th>
                                 <th>Баланс</th>
                                 <th>Тариф</th>
@@ -233,28 +222,6 @@
                             <!-- Данные будут загружены через JS -->
                         </tbody>
                     </table>
-                </div>
-            </div>
-
-            <!-- Заявки -->
-            <div id="applications" class="tab-content">
-                <div class="content-header">
-                    <h1><i class="fas fa-file-alt"></i> Заявки на подключение</h1>
-                </div>
-
-                <div class="filters">
-                    <select id="applicationFilter" class="filter-select">
-                        <option value="all">Все заявки</option>
-                        <option value="pending">В ожидании</option>
-                        <option value="approved">Одобренные</option>
-                        <option value="rejected">Отклоненные</option>
-                    </select>
-                </div>
-
-                <div class="applications-grid">
-                    <div id="applicationsList">
-                        <!-- Заявки будут загружены через JS -->
-                    </div>
                 </div>
             </div>
 

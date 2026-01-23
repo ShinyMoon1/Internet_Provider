@@ -1,9 +1,9 @@
-// payments.js - С ПОЛУЧЕНИЕМ ИМЕН ПОЛЬЗОВАТЕЛЕЙ
+// payments.js - С ИМЕНАМИ ПОЛЬЗОВАТЕЛЕЙ И ПОИСКОМ ПО ИМЕНИ
 class PaymentsAPI {
     constructor() {
         this.baseUrl = 'http://localhost:8080/api/v1/admin';
         this.allPayments = [];
-        this.usersCache = new Map(); // Кэш пользователей
+        this.allUsers = []; // Кэш пользователей
     }
 
     async getPayments(params = {}) {
@@ -28,19 +28,10 @@ class PaymentsAPI {
             });
             
             if (!response.ok) {
-                throw new Error(`Ошибка: ${response.status} - ${response.statusText}`);
+                throw new Error(`Ошибка: ${response.status}`);
             }
             
             const data = await response.json();
-            
-            // Сохраняем все платежи для клиентской фильтрации
-            if (data.payments && Array.isArray(data.payments)) {
-                this.allPayments = data.payments;
-                
-                // Получаем информацию о пользователях
-                await this.fetchUserNamesForPayments(this.allPayments);
-            }
-            
             return data;
             
         } catch (error) {
@@ -49,106 +40,14 @@ class PaymentsAPI {
         }
     }
 
-    async fetchUserNamesForPayments(payments) {
-        try {
-            // Собираем уникальные ID пользователей
-            const userIds = [...new Set(payments.map(p => p.user_id).filter(id => id))];
-            
-            if (userIds.length === 0) return;
-            
-            console.log(`👥 Загружаем имена для пользователей: ${userIds.join(', ')}`);
-            
-            // Получаем информацию о пользователях
-            const token = window.authService.token;
-            
-            // Пробуем получить пользователей пачкой или по одному
-            for (const userId of userIds) {
-                if (!this.usersCache.has(userId)) {
-                    try {
-                        const user = await this.getUserById(userId, token);
-                        if (user) {
-                            this.usersCache.set(userId, {
-                                id: userId,
-                                name: user.name || user.username || `Пользователь #${userId}`,
-                                email: user.email || '',
-                                phone: user.phone || ''
-                            });
-                        }
-                    } catch (error) {
-                        console.warn(`⚠️ Не удалось получить пользователя ${userId}:`, error);
-                        this.usersCache.set(userId, {
-                            id: userId,
-                            name: `Пользователь #${userId}`,
-                            email: '',
-                            phone: ''
-                        });
-                    }
-                }
-            }
-            
-            // Обновляем платежи с именами пользователей
-            payments.forEach(payment => {
-                if (payment.user_id && this.usersCache.has(payment.user_id)) {
-                    const user = this.usersCache.get(payment.user_id);
-                    payment.user_real_name = user.name;
-                    payment.user_email = user.email;
-                    payment.user_phone = user.phone;
-                }
-            });
-            
-        } catch (error) {
-            console.error('Ошибка при загрузке имен пользователей:', error);
-        }
-    }
-
-    async getUserById(userId, token) {
-        try {
-            // Пробуем endpoint для получения пользователя
-            const response = await fetch(`${this.baseUrl}/users/${userId}`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                return data.user || data;
-            }
-            
-            // Если нет отдельного endpoint, пробуем получить всех пользователей
-            const allUsersResponse = await fetch(`${this.baseUrl}/users?limit=1000`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (allUsersResponse.ok) {
-                const data = await allUsersResponse.json();
-                const users = data.users || data.user || [];
-                const user = users.find(u => u.id == userId);
-                return user;
-            }
-            
-            return null;
-            
-        } catch (error) {
-            console.error(`Ошибка при получении пользователя ${userId}:`, error);
-            return null;
-        }
-    }
-
-    async searchUsers(search) {
+    async getAllUsers() {
         try {
             if (!window.authService || !window.authService.token) {
-                return [];
+                throw new Error('Не авторизован');
             }
             
             const token = window.authService.token;
-            const response = await fetch(`${this.baseUrl}/users?search=${encodeURIComponent(search)}&limit=50`, {
+            const response = await fetch(`${this.baseUrl}/users?limit=1000`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -156,180 +55,109 @@ class PaymentsAPI {
                 }
             });
             
-            if (response.ok) {
-                const data = await response.json();
-                return data.users || data.user || [];
+            if (!response.ok) {
+                throw new Error(`Ошибка: ${response.status}`);
             }
             
-            return [];
+            const data = await response.json();
+            this.allUsers = data.user || data.users || [];
+            console.log(`👥 Загружено пользователей: ${this.allUsers.length}`);
+            
+            return this.allUsers;
             
         } catch (error) {
-            console.error('Ошибка при поиске пользователей:', error);
-            return [];
+            console.error('Ошибка загрузки пользователей:', error);
+            throw error;
         }
+    }
+
+    // Получить пользователя по ID
+    getUserById(userId) {
+        return this.allUsers.find(user => user.id == userId);
+    }
+
+    // Поиск пользователей по имени или email
+    searchUsers(searchText) {
+        if (!searchText || searchText.length < 2) return [];
+        
+        const searchLower = searchText.toLowerCase();
+        return this.allUsers.filter(user => {
+            const name = (user.name || user.username || '').toLowerCase();
+            const email = (user.email || '').toLowerCase();
+            
+            return name.includes(searchLower) || 
+                   email.includes(searchLower) ||
+                   user.id.toString().includes(searchText);
+        });
     }
 }
 
 class PaymentsUI {
     constructor() {
         this.api = new PaymentsAPI();
-        this.currentPage = 1;
-        this.totalPages = 1;
-        this.totalItems = 0;
-        this.limit = 20;
         this.currentFilter = 'all';
         this.currentSearch = '';
         this.currentDate = '';
         this.allPayments = [];
+        this.allUsers = [];
+        this.paymentsWithUserInfo = []; // Платежи с информацией о пользователях
+        this.filteredPayments = []; // Отфильтрованные платежи для отображения
+        this.isInitialized = false;
     }
 
-    async loadAllPayments() {
+    async loadAllData() {
         try {
-            console.log('📥 Загружаем все платежи для фильтрации...');
+            console.log('📥 Загружаем все данные...');
             
-            const params = {
-                limit: 1000,
-                page: 1
-            };
-            
-            const data = await this.api.getPayments(params);
-            this.allPayments = data.payments || [];
+            // Загружаем платежи
+            const paymentsData = await this.api.getPayments({ limit: 1000 });
+            this.allPayments = paymentsData.payments || [];
             console.log(`📊 Загружено платежей: ${this.allPayments.length}`);
             
-            // Применяем текущие фильтры
+            // Загружаем пользователей
+            this.allUsers = await this.api.getAllUsers();
+            
+            // Объединяем данные
+            this.combinePaymentsWithUserInfo();
+            
+            // Применяем фильтры
             this.applyFilters();
             
         } catch (error) {
-            console.error('Ошибка загрузки всех платежей:', error);
-            this.showError('Не удалось загрузить платежи: ' + error.message);
+            console.error('Ошибка загрузки данных:', error);
+            this.showError('Не удалось загрузить данные: ' + error.message);
         }
     }
 
-    async searchUsers(search) {
-        if (!search || search.length < 2) return [];
+    combinePaymentsWithUserInfo() {
+        console.log('🔗 Объединяем платежи с информацией о пользователях...');
         
-        try {
-            console.log(`🔍 Поиск пользователей: "${search}"`);
-            const users = await this.api.searchUsers(search);
-            console.log(`✅ Найдено пользователей: ${users.length}`);
-            return users;
-        } catch (error) {
-            console.error('Ошибка поиска пользователей:', error);
-            return [];
-        }
-    }
-
-    applyFilters() {
-        console.log('🎛️ Применяем фильтры...');
-        console.log('🔍 Поиск:', this.currentSearch);
-        console.log('🎯 Фильтр:', this.currentFilter);
-        console.log('📅 Дата:', this.currentDate);
-        
-        // Фильтруем платежи на клиенте
-        let filteredPayments = [...this.allPayments];
-        
-        // 1. Фильтр по дате
-        if (this.currentDate) {
-            const selectedDate = new Date(this.currentDate);
-            selectedDate.setHours(0, 0, 0, 0);
+        this.paymentsWithUserInfo = this.allPayments.map(payment => {
+            const user = this.api.getUserById(payment.user_id);
             
-            filteredPayments = filteredPayments.filter(payment => {
-                if (!payment.created_at) return false;
-                
-                try {
-                    const paymentDate = new Date(payment.created_at);
-                    paymentDate.setHours(0, 0, 0, 0);
-                    
-                    return paymentDate.getTime() === selectedDate.getTime();
-                } catch (e) {
-                    return false;
+            return {
+                ...payment,
+                user_info: user ? {
+                    id: user.id,
+                    name: user.name || user.username || `Пользователь #${user.id}`,
+                    email: user.email || '',
+                    phone: user.phone || user.phone_number || '',
+                    tariff: user.tariff_name || user.tariff || 'Без тарифа'
+                } : {
+                    id: payment.user_id,
+                    name: `Пользователь #${payment.user_id}`,
+                    email: '',
+                    phone: '',
+                    tariff: 'Неизвестно'
                 }
-            });
-            
-            console.log(`📅 После фильтра по дате: ${filteredPayments.length} платежей`);
-        }
-        
-        // 2. Поиск
-        if (this.currentSearch) {
-            const searchLower = this.currentSearch.toLowerCase().trim();
-            
-            filteredPayments = filteredPayments.filter(payment => {
-                // Поиск по ID платежа
-                if (payment.id && payment.id.toString().includes(searchLower)) {
-                    return true;
-                }
-                
-                // Поиск по ID пользователя
-                if (payment.user_id && payment.user_id.toString().includes(searchLower)) {
-                    return true;
-                }
-                
-                // Поиск по реальному имени пользователя
-                if (payment.user_real_name && payment.user_real_name.toLowerCase().includes(searchLower)) {
-                    return true;
-                }
-                
-                // Поиск по email пользователя
-                if (payment.user_email && payment.user_email.toLowerCase().includes(searchLower)) {
-                    return true;
-                }
-                
-                // Поиск по телефону пользователя
-                if (payment.user_phone && payment.user_phone.includes(searchLower)) {
-                    return true;
-                }
-                
-                // Поиск по старому имени (из API)
-                if (payment.user_name && payment.user_name.toLowerCase().includes(searchLower)) {
-                    return true;
-                }
-                
-                // Поиск по сумме
-                if (payment.amount && payment.amount.toString().includes(searchLower)) {
-                    return true;
-                }
-                
-                // Поиск по методу оплаты
-                if (payment.payment_method && payment.payment_method.toLowerCase().includes(searchLower)) {
-                    return true;
-                }
-                
-                return false;
-            });
-            
-            console.log(`🔍 После поиска: ${filteredPayments.length} платежей`);
-        }
-        
-        // 3. Сортируем по дате (новые сверху)
-        filteredPayments.sort((a, b) => {
-            const dateA = new Date(a.created_at || 0);
-            const dateB = new Date(b.created_at || 0);
-            return dateB - dateA;
+            };
         });
         
-        // Обновляем общее количество
-        this.totalItems = filteredPayments.length;
-        this.totalPages = Math.ceil(this.totalItems / this.limit);
-        
-        // Получаем платежи для текущей страницы
-        const startIndex = (this.currentPage - 1) * this.limit;
-        const endIndex = startIndex + this.limit;
-        const pagePayments = filteredPayments.slice(startIndex, endIndex);
-        
-        console.log(`📊 Отображаем: ${pagePayments.length} платежей (страница ${this.currentPage}/${this.totalPages})`);
-        
-        // Рендерим таблицу
-        if (pagePayments.length === 0) {
-            this.showNoPayments();
-        } else {
-            this.renderPaymentsTable(pagePayments);
-        }
-        
-        this.updatePagination();
+        console.log(`✅ Объединено ${this.paymentsWithUserInfo.length} платежей`);
     }
 
-    async loadPayments(page = 1) {
-        console.log(`🔄 Загружаем платежи, страница ${page}...`);
+    async loadPayments() {
+        console.log(`🔄 Загружаем платежи...`);
         
         const tableBody = document.getElementById('paymentsTable');
         if (!tableBody) {
@@ -337,36 +165,124 @@ class PaymentsUI {
             return;
         }
         
-        // Если это первая загрузка, загружаем все платежи
-        if (this.allPayments.length === 0) {
-            await this.loadAllPayments();
-            return;
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 20px;">
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 10px;"></i>
+                        <span>Загрузка данных...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        
+        try {
+            // Загружаем все данные если еще не загружены
+            if (this.paymentsWithUserInfo.length === 0) {
+                await this.loadAllData();
+                return;
+            }
+            
+            // Применяем фильтры
+            this.applyFilters();
+            
+        } catch (error) {
+            console.error('Ошибка загрузки платежей:', error);
+            this.showError('Не удалось загрузить платежи: ' + error.message);
+        }
+    }
+
+    applyFilters() {
+        let filtered = [...this.paymentsWithUserInfo];
+        
+        console.log('🎛️ Применяем фильтры:', {
+            search: this.currentSearch,
+            filter: this.currentFilter,
+            date: this.currentDate
+        });
+        
+        // 1. Поиск по имени пользователя, email или ID
+        if (this.currentSearch) {
+            const searchLower = this.currentSearch.toLowerCase().trim();
+            
+            filtered = filtered.filter(payment => {
+                const user = payment.user_info;
+                
+                // Поиск по имени пользователя
+                if (user.name.toLowerCase().includes(searchLower)) return true;
+                
+                // Поиск по email пользователя
+                if (user.email.toLowerCase().includes(searchLower)) return true;
+                
+                // Поиск по телефону пользователя
+                if (user.phone.includes(searchLower)) return true;
+                
+                // Поиск по ID пользователя
+                if (payment.user_id.toString().includes(searchLower)) return true;
+                
+                // Поиск по ID платежа
+                if (payment.id && payment.id.toString().includes(searchLower)) return true;
+                
+                // Поиск по сумме
+                if (payment.amount && payment.amount.toString().includes(searchLower)) return true;
+                
+                return false;
+            });
+            console.log(`🔍 После поиска "${this.currentSearch}": ${filtered.length} платежей`);
         }
         
-        // Иначе применяем фильтры
-        this.currentPage = page;
-        this.applyFilters();
+        // 2. Фильтр по статусу
+        if (this.currentFilter !== 'all') {
+            filtered = filtered.filter(payment => payment.status === this.currentFilter);
+            console.log(`✅ После фильтра по статусу "${this.currentFilter}": ${filtered.length} платежей`);
+        }
+        
+        // 3. Фильтр по дате
+        if (this.currentDate) {
+            const selectedDate = new Date(this.currentDate);
+            selectedDate.setHours(0, 0, 0, 0);
+            
+            filtered = filtered.filter(payment => {
+                if (!payment.created_at) return false;
+                
+                try {
+                    const paymentDate = new Date(payment.created_at);
+                    paymentDate.setHours(0, 0, 0, 0);
+                    return paymentDate.getTime() === selectedDate.getTime();
+                } catch (e) {
+                    return false;
+                }
+            });
+            console.log(`📅 После фильтра по дате "${this.currentDate}": ${filtered.length} платежей`);
+        }
+        
+        // Сортировка по дате (новые сверху)
+        filtered.sort((a, b) => {
+            return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        });
+        
+        this.filteredPayments = filtered;
+        console.log(`📊 Всего отфильтровано: ${filtered.length} платежей`);
+        
+        if (filtered.length === 0) {
+            this.showNoPayments();
+        } else {
+            this.renderPaymentsTable(filtered);
+        }
+        
+        this.updateInfo();
     }
 
     renderPaymentsTable(payments) {
         const tableBody = document.getElementById('paymentsTable');
         if (!tableBody) return;
         
-        console.log('🎨 Рендерим', payments.length, 'платежей');
-        
         let html = '';
         
         payments.forEach(payment => {
-            // Получаем имя пользователя
-            const userName = payment.user_real_name || 
-                           payment.user_name || 
-                           `Пользователь #${payment.user_id}`;
+            const user = payment.user_info;
             
-            // Дополнительная информация о пользователе
-            const userEmail = payment.user_email ? `<br><small style="color: #666;">${payment.user_email}</small>` : '';
-            const userPhone = payment.user_phone ? `<br><small style="color: #666;">📱 ${payment.user_phone}</small>` : '';
-            
-            // Определяем статус
+            // Статус
             let statusText = 'Неизвестно';
             let statusClass = 'status-inactive';
             
@@ -376,26 +292,17 @@ class PaymentsUI {
             } else if (payment.status === 'pending') {
                 statusText = 'В обработке';
                 statusClass = 'status-warning';
-            } else if (payment.status === 'failed' || payment.status === 'cancelled') {
-                statusText = 'Ошибка';
-                statusClass = 'status-danger';
-            } else if (payment.status === 'refunded') {
-                statusText = 'Возврат';
-                statusClass = 'status-info';
             }
             
-            // Форматируем дату
+            // Дата
             let paymentDate = '-';
-            let paymentTime = '';
             if (payment.created_at) {
                 try {
                     const date = new Date(payment.created_at);
-                    paymentDate = date.toLocaleDateString('ru-RU', {
+                    paymentDate = date.toLocaleString('ru-RU', {
                         day: '2-digit',
                         month: '2-digit',
-                        year: 'numeric'
-                    });
-                    paymentTime = date.toLocaleTimeString('ru-RU', {
+                        year: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit'
                     });
@@ -404,22 +311,26 @@ class PaymentsUI {
                 }
             }
             
-            // Форматируем сумму
-            const amount = payment.amount || 0;
-            const formattedAmount = `${amount} ₽`;
+            // Дополнительная информация о пользователе
+            const userEmail = user.email ? `<br><small style="color: #666;">${user.email}</small>` : '';
+            const userPhone = user.phone ? `<br><small style="color: #666;">📱 ${user.phone}</small>` : '';
+            const userTariff = user.tariff ? `<br><small style="color: #888; font-size: 11px;">Тариф: ${user.tariff}</small>` : '';
             
             html += `
                 <tr>
                     <td>${payment.id || '-'}</td>
                     <td>
-                        <div style="font-weight: 500;">${userName}</div>
-                        <small style="color: #666; font-size: 11px;">ID: ${payment.user_id}</small>
-                        ${userEmail}
-                        ${userPhone}
+                        <div style="font-weight: 500; margin-bottom: 4px;">${user.name}</div>
+                        <div style="font-size: 12px; color: #666;">
+                            <span>ID: ${payment.user_id}</span>
+                            ${userEmail}
+                            ${userPhone}
+                            ${userTariff}
+                        </div>
                     </td>
                     <td>
                         <span class="amount positive">
-                            ${formattedAmount}
+                            ${payment.amount || 0} ₽
                         </span>
                     </td>
                     <td>
@@ -427,10 +338,7 @@ class PaymentsUI {
                             ${statusText}
                         </span>
                     </td>
-                    <td>
-                        <div>${paymentDate}</div>
-                        <small style="color: #666;">${paymentTime}</small>
-                    </td>
+                    <td>${paymentDate}</td>
                 </tr>
             `;
         });
@@ -439,76 +347,43 @@ class PaymentsUI {
         console.log('✅ Таблица платежей отрендерена');
     }
 
-    updatePagination() {
-        let paginationContainer = document.getElementById('paymentsPagination');
-        
-        if (!paginationContainer) {
-            const tableContainer = document.querySelector('#payments .table-container');
-            if (tableContainer) {
-                const paginationHTML = `
-                    <div class="pagination" id="paymentsPagination">
-                        <div class="pagination-info">
-                            Показано: <span id="paymentsStart">0</span>-<span id="paymentsEnd">0</span> из <span id="paymentsTotal">${this.totalItems}</span>
-                        </div>
-                        <div class="pagination-controls">
-                            <button class="pagination-btn" id="paymentsFirst" ${this.currentPage <= 1 ? 'disabled' : ''}>
-                                <i class="fas fa-angle-double-left"></i>
-                            </button>
-                            <button class="pagination-btn" id="paymentsPrev" ${this.currentPage <= 1 ? 'disabled' : ''}>
-                                <i class="fas fa-angle-left"></i>
-                            </button>
-                            <span class="pagination-current">
-                                ${this.currentPage} / ${this.totalPages}
-                            </span>
-                            <button class="pagination-btn" id="paymentsNext" ${this.currentPage >= this.totalPages ? 'disabled' : ''}>
-                                <i class="fas fa-angle-right"></i>
-                            </button>
-                            <button class="pagination-btn" id="paymentsLast" ${this.currentPage >= this.totalPages ? 'disabled' : ''}>
-                                <i class="fas fa-angle-double-right"></i>
-                            </button>
-                        </div>
-                    </div>
-                `;
-                
-                tableContainer.insertAdjacentHTML('afterend', paginationHTML);
-                paginationContainer = document.getElementById('paymentsPagination');
-            }
+    updateInfo() {
+        // Удаляем старую информацию если есть
+        const oldInfo = document.getElementById('paymentsInfo');
+        if (oldInfo) {
+            oldInfo.remove();
         }
         
-        if (paginationContainer) {
-            const start = Math.min((this.currentPage - 1) * this.limit + 1, this.totalItems);
-            const end = Math.min(this.currentPage * this.limit, this.totalItems);
-            
-            document.getElementById('paymentsStart').textContent = start;
-            document.getElementById('paymentsEnd').textContent = end;
-            document.getElementById('paymentsTotal').textContent = this.totalItems;
-            
-            document.getElementById('paymentsFirst').disabled = this.currentPage <= 1;
-            document.getElementById('paymentsPrev').disabled = this.currentPage <= 1;
-            document.getElementById('paymentsNext').disabled = this.currentPage >= this.totalPages;
-            document.getElementById('paymentsLast').disabled = this.currentPage >= this.totalPages;
-            
-            const currentPageSpan = paginationContainer.querySelector('.pagination-current');
-            if (currentPageSpan) {
-                currentPageSpan.textContent = `${this.currentPage} / ${this.totalPages}`;
-            }
-            
-            this.setupPaginationEvents();
-        }
-    }
-
-    setupPaginationEvents() {
-        document.getElementById('paymentsFirst')?.addEventListener('click', () => this.goToPage(1));
-        document.getElementById('paymentsPrev')?.addEventListener('click', () => this.goToPage(this.currentPage - 1));
-        document.getElementById('paymentsNext')?.addEventListener('click', () => this.goToPage(this.currentPage + 1));
-        document.getElementById('paymentsLast')?.addEventListener('click', () => this.goToPage(this.totalPages));
-    }
-
-    goToPage(page) {
-        if (page < 1 || page > this.totalPages || page === this.currentPage) return;
+        const tableContainer = document.querySelector('#payments .table-container');
+        if (!tableContainer) return;
         
-        this.currentPage = page;
-        this.loadPayments(page);
+        let filterInfo = '';
+        if (this.currentSearch || this.currentFilter !== 'all' || this.currentDate) {
+            const filters = [];
+            if (this.currentSearch) filters.push(`поиск: "${this.currentSearch}"`);
+            if (this.currentFilter !== 'all') filters.push(`статус: ${this.currentFilter}`);
+            if (this.currentDate) filters.push(`дата: ${this.currentDate}`);
+            
+            filterInfo = `(фильтры: ${filters.join(', ')})`;
+        }
+        
+        const infoHTML = `
+            <div class="payments-info" id="paymentsInfo" style="
+                margin-top: 20px;
+                padding: 12px 16px;
+                background: #f8f9fa;
+                border-radius: 8px;
+                border: 1px solid #e9ecef;
+                font-size: 14px;
+                color: #666;
+            ">
+                <i class="fas fa-info-circle"></i>
+                Показано: <strong>${this.filteredPayments.length}</strong> платежей 
+                ${filterInfo}
+            </div>
+        `;
+        
+        tableContainer.insertAdjacentHTML('afterend', infoHTML);
     }
 
     showNoPayments() {
@@ -516,22 +391,29 @@ class PaymentsUI {
         if (!tableBody) return;
         
         let message = 'Платежи не найдены';
-        let submessage = '';
+        let hint = '';
         
         if (this.currentSearch || this.currentDate || this.currentFilter !== 'all') {
             message = 'Платежи не найдены по заданным критериям';
-            submessage = 'Попробуйте изменить параметры поиска';
+            hint = 'Попробуйте изменить параметры поиска';
+            
+            if (this.currentSearch) {
+                hint = `По запросу "${this.currentSearch}" ничего не найдено`;
+            }
         }
         
         tableBody.innerHTML = `
             <tr>
-                <td colspan="7" style="text-align: center; padding: 40px;">
+                <td colspan="5" style="text-align: center; padding: 40px;">
                     <i class="fas fa-credit-card" style="font-size: 48px; color: #ccc; margin-bottom: 15px;"></i>
                     <h3 style="margin: 0 0 10px 0; color: #666;">${message}</h3>
-                    <p style="color: #999;">${submessage}</p>
+                    <p style="color: #999;">${hint}</p>
                 </td>
             </tr>
         `;
+        
+        // Обновляем информацию
+        this.updateInfo();
     }
 
     showError(message) {
@@ -540,13 +422,10 @@ class PaymentsUI {
         
         tableBody.innerHTML = `
             <tr>
-                <td colspan="7" style="text-align: center; padding: 40px; color: #dc3545;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 15px;"></i>
-                    <h3 style="margin: 0 0 10px 0;">Ошибка загрузки</h3>
+                <td colspan="5" style="text-align: center; padding: 40px; color: #dc3545;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Ошибка</h3>
                     <p>${message}</p>
-                    <button onclick="paymentsUI.loadAllPayments()" style="margin-top: 15px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                        Попробовать снова
-                    </button>
                 </td>
             </tr>
         `;
@@ -556,14 +435,28 @@ class PaymentsUI {
 // Глобальный экземпляр
 window.paymentsUI = new PaymentsUI();
 
+// Функция для загрузки вкладки платежей
 window.loadPaymentsTab = async function() {
-    if (!window.paymentsUI) return;
+    console.log('📥 Загружаем вкладку платежей...');
+    
+    if (!window.paymentsUI) {
+        console.error('❌ paymentsUI не инициализирован');
+        return;
+    }
     
     await paymentsUI.loadPayments();
+    
+    // Инициализируем обработчики только после загрузки данных
+    initPaymentsTabHandlers();
 };
 
-window.initPaymentsTab = function() {
-    console.log('🔧 Инициализация вкладки платежей...');
+// Инициализация обработчиков фильтров
+function initPaymentsTabHandlers() {
+    console.log('🔧 Инициализация обработчиков платежей...');
+    
+    // Удаляем старую кнопку очистки если есть
+    const oldClearBtn = document.querySelector('#payments .clear-filters-btn');
+    if (oldClearBtn) oldClearBtn.remove();
     
     const searchInput = document.getElementById('paymentSearch');
     const filterSelect = document.getElementById('paymentFilter');
@@ -572,21 +465,32 @@ window.initPaymentsTab = function() {
     // Обновляем placeholder для поиска
     if (searchInput) {
         searchInput.placeholder = 'Поиск по имени, email, телефону или ID...';
+        searchInput.title = 'Ищите по: имени пользователя, email, телефону, ID пользователя, ID платежа';
     }
     
-    // Добавляем подсказку при фокусе
-    if (searchInput) {
-        searchInput.addEventListener('focus', function() {
-            this.title = 'Ищите по: имени, email, телефону, ID пользователя, ID платежа, сумме';
-        });
-    }
-    
-    // Очистка фильтров
+    // Кнопка очистки
     const clearFiltersBtn = document.createElement('button');
-    clearFiltersBtn.className = 'btn btn-outline';
+    clearFiltersBtn.type = 'button';
+    clearFiltersBtn.className = 'btn btn-outline clear-filters-btn';
     clearFiltersBtn.innerHTML = '<i class="fas fa-times"></i> Очистить';
-    clearFiltersBtn.style.marginLeft = '10px';
+    clearFiltersBtn.style.cssText = `
+        margin-left: 10px;
+        padding: 8px 16px;
+        background: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    `;
+    
     clearFiltersBtn.onclick = function() {
+        console.log('🧹 Очищаем фильтры...');
+        
         if (searchInput) searchInput.value = '';
         if (filterSelect) filterSelect.value = 'all';
         if (dateInput) dateInput.value = '';
@@ -594,54 +498,43 @@ window.initPaymentsTab = function() {
         paymentsUI.currentSearch = '';
         paymentsUI.currentFilter = 'all';
         paymentsUI.currentDate = '';
-        paymentsUI.currentPage = 1;
         paymentsUI.applyFilters();
     };
     
+    // Добавляем кнопку в фильтры
     const filtersDiv = document.querySelector('#payments .filters');
     if (filtersDiv) {
         filtersDiv.appendChild(clearFiltersBtn);
     }
     
-    // Поиск
+    // Обработчики событий
     if (searchInput) {
         searchInput.addEventListener('input', debounce(function() {
             const searchText = this.value.trim();
-            console.log('🔍 Поиск платежей:', searchText);
-            
+            console.log('🔍 Поиск:', searchText);
             paymentsUI.currentSearch = searchText;
-            paymentsUI.currentPage = 1;
             paymentsUI.applyFilters();
-            
-            // Показываем подсказку если набрали мало символов
-            if (searchText.length === 1) {
-                console.log('💡 Введите 2 или более символов для поиска по имени');
-            }
         }, 500));
     }
     
-    // Фильтр по типу
     if (filterSelect) {
         filterSelect.addEventListener('change', function() {
-            console.log('🎛️ Фильтр платежей:', this.value);
+            console.log('🎛️ Фильтр по статусу:', this.value);
             paymentsUI.currentFilter = this.value;
-            paymentsUI.currentPage = 1;
             paymentsUI.applyFilters();
         });
     }
     
-    // Фильтр по дате
     if (dateInput) {
         dateInput.addEventListener('change', function() {
             console.log('📅 Фильтр по дате:', this.value);
             paymentsUI.currentDate = this.value;
-            paymentsUI.currentPage = 1;
             paymentsUI.applyFilters();
         });
     }
     
-    console.log('✅ Вкладка платежей инициализирована');
-};
+    console.log('✅ Обработчики платежей инициализированы');
+}
 
 function debounce(func, wait) {
     let timeout;
@@ -650,3 +543,55 @@ function debounce(func, wait) {
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
 }
+
+// Добавляем стили
+const style = document.createElement('style');
+style.textContent = `
+    .status-badge {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    
+    .status-active {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-warning {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .status-inactive {
+        background: #e9ecef;
+        color: #495057;
+    }
+    
+    .amount.positive {
+        color: #28a745;
+        font-weight: bold;
+        font-size: 16px;
+    }
+    
+    .btn-outline {
+        background: #6c757d;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    .btn-outline:hover {
+        background: #5a6268;
+        transform: translateY(-1px);
+    }
+`;
+document.head.appendChild(style);
