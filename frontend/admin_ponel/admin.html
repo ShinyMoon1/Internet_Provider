@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/exceljs@4.4.0/dist/exceljs.min.js"></script>
 </head>
 <body>
     <!-- Логин форма -->
@@ -118,6 +119,24 @@
                     </div>
                 </div>
 
+                <!-- Блок быстрых отчетов на дашборде -->
+                <div class="dashboard-actions">
+                    <div class="actions-card">
+                        <h3><i class="fas fa-file-excel"></i> Быстрый отчет</h3>
+                        <div class="quick-reports">
+                            <button class="btn btn-outline" onclick="showQuickReport('payments')">
+                                <i class="fas fa-credit-card"></i> Отчет по платежам
+                            </button>
+                            <button class="btn btn-outline" onclick="showQuickReport('users')">
+                                <i class="fas fa-users"></i> Отчет по пользователям
+                            </button>
+                            <button class="btn btn-outline" onclick="showQuickReport('combined')">
+                                <i class="fas fa-layer-group"></i> Комбинированный отчет
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="charts-grid">
                     <div class="chart-card">
                         <h3>Последние платежи</h3>
@@ -160,6 +179,11 @@
             <div id="users" class="tab-content">
                 <div class="content-header">
                     <h1><i class="fas fa-users"></i> Управление пользователями</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="showReportModal('users')">
+                            <i class="fas fa-file-excel"></i> Сформировать отчет
+                        </button>
+                    </div>
                 </div>
 
                 <div class="filters">
@@ -193,18 +217,21 @@
             <div id="payments" class="tab-content">
                 <div class="content-header">
                     <h1><i class="fas fa-credit-card"></i> История платежей</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="showReportModal('payments')">
+                            <i class="fas fa-file-excel"></i> Сформировать отчет
+                        </button>
+                    </div>
                 </div>
 
                 <div class="filters">
-                    <input type="text" id="paymentSearch" placeholder="Поиск по ID пользователя или имени..." class="search-input">
+                    <input type="text" id="paymentSearch" placeholder="Поиск по имени, email, телефону или ID..." class="search-input">
                     <select id="paymentFilter" class="filter-select">
                         <option value="all">Все платежи</option>
                         <option value="completed">Успешные</option>
                         <option value="pending">В обработке</option>
                     </select>
                     <input type="date" id="paymentDate" class="filter-select" placeholder="Фильтр по дате">
-                    <!-- Можно добавить второй input для диапазона дат -->
-                    <input type="date" id="paymentDateEnd" class="filter-select" placeholder="По" style="display: none;">
                 </div>
 
                 <div class="table-container">
@@ -224,37 +251,132 @@
                     </table>
                 </div>
             </div>
+        </main>
+    </div>
 
-    <!-- Модальные окна -->
-    <div id="userModal" class="modal">
-        <div class="modal-content">
+    <!-- Модальное окно для отчетов -->
+    <div id="reportModal" class="modal">
+        <div class="modal-content" style="max-width: 550px;">
             <div class="modal-header">
-                <h3>Добавить пользователя</h3>
-                <button class="close-btn" onclick="closeUserModal()">&times;</button>
+                <h3><i class="fas fa-file-excel"></i> Формирование отчета</h3>
+                <button class="close-btn" onclick="closeReportModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <form id="userForm">
+                <form id="reportForm">
                     <div class="form-group">
-                        <label>Имя:</label>
-                        <input type="text" name="name" required>
+                        <label>Тип отчета:</label>
+                        <select id="reportType" style="width: 100%;" onchange="onReportTypeChange()">
+                            <option value="payments">Отчет по платежам</option>
+                            <option value="users">Отчет по пользователям</option>
+                            <option value="combined">Комбинированный отчет</option>
+                        </select>
                     </div>
-                    <div class="form-group">
-                        <label>Email:</label>
-                        <input type="email" name="email" required>
+                    
+                    <div id="paymentsOptions" class="report-options">
+                        <div class="form-group">
+                            <label>Период отчета:</label>
+                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <input type="date" id="reportDateStart" style="flex: 1;">
+                                <span>—</span>
+                                <input type="date" id="reportDateEnd" style="flex: 1;">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Статус платежей:</label>
+                            <select id="reportStatus" style="width: 100%;">
+                                <option value="all">Все платежи</option>
+                                <option value="completed">Только успешные</option>
+                                <option value="pending">Только в обработке</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Телефон:</label>
-                        <input type="tel" name="phone" required>
+                    
+                    <div id="usersOptions" class="report-options" style="display: none;">
+                        <div class="form-group">
+                            <label>Дата регистрации:</label>
+                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <input type="date" id="userDateStart" style="flex: 1;">
+                                <span>—</span>
+                                <input type="date" id="userDateEnd" style="flex: 1;">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Фильтр по тарифу:</label>
+                            <select id="userTariffFilter" style="width: 100%;">
+                                <option value="all">Все пользователи</option>
+                                <option value="with_tariff">С тарифом</option>
+                                <option value="without_tariff">Без тарифа</option>
+                            </select>
+                        </div>
                     </div>
+                    
+                    <div id="combinedOptions" class="report-options" style="display: none;">
+                        <div class="form-group">
+                            <label>Период отчета:</label>
+                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <input type="date" id="combinedDateStart" style="flex: 1;">
+                                <span>—</span>
+                                <input type="date" id="combinedDateEnd" style="flex: 1;">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Включать в отчет:</label>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-weight: normal;">
+                                    <input type="checkbox" id="includePayments" checked>
+                                    <span>Платежи</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; font-weight: normal;">
+                                    <input type="checkbox" id="includeUsers" checked>
+                                    <span>Пользователи</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; font-weight: normal;">
+                                    <input type="checkbox" id="includeStats">
+                                    <span>Статистику</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="form-group">
-                        <label>Пароль:</label>
-                        <input type="password" name="password" required>
+                        <label>Порция данных:</label>
+                        <select id="reportChunkSize" style="width: 100%;">
+                            <option value="all">Все данные</option>
+                            <option value="500">500 записей</option>
+                            <option value="1000">1000 записей</option>
+                            <option value="2000">2000 записей</option>
+                            <option value="5000">5000 записей</option>
+                        </select>
+                        <small style="color: #666;">При большом объеме данных отчет будет разбит на части</small>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeUserModal()">Отмена</button>
-                <button class="btn btn-primary" onclick="saveUser()">Сохранить</button>
+                <button class="btn btn-secondary" onclick="closeReportModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="generateReport()">
+                    <i class="fas fa-download"></i> Сформировать отчет
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно прогресса -->
+    <div id="reportProgressModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-spinner fa-spin"></i> Формирование отчета</h3>
+            </div>
+            <div class="modal-body">
+                <div id="progressMessage">Подготовка данных...</div>
+                <div class="progress-bar" style="margin-top: 15px;">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+                <div id="progressDetails" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="cancelReport()" id="cancelReportBtn">
+                    Отмена
+                </button>
             </div>
         </div>
     </div>
@@ -262,5 +384,6 @@
     <script src="./admin.js"></script>
     <script src="./auth.js"></script>
     <script src="./paymentHistory.js"></script>
+    <script src="./reports.js"></script>
 </body>
 </html>
