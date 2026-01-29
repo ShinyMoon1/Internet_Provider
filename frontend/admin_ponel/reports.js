@@ -7,8 +7,10 @@ class ReportGenerator {
         this.totalChunks = 1;
         this.reportData = [];
         this.reportConfig = {};
+        this.tariffMap = null;
     }
 
+    // Методы класса должны быть определены так
     async generateExcelReport(config) {
         try {
             if (this.isGenerating) {
@@ -46,7 +48,6 @@ class ReportGenerator {
     }
 
     async generatePaymentsReport(config) {
-        // Загружаем данные с фильтрацией по дате
         await this.loadPaymentsData(config);
         
         if (this.reportData.length === 0) {
@@ -55,11 +56,9 @@ class ReportGenerator {
             return;
         }
         
-        // Разбиваем на части
         const chunkSize = config.chunkSize === 'all' ? this.reportData.length : parseInt(config.chunkSize);
         this.totalChunks = Math.ceil(this.reportData.length / chunkSize);
         
-        // Генерируем файлы
         for (let i = 0; i < this.totalChunks; i++) {
             this.currentChunk = i + 1;
             const startIdx = i * chunkSize;
@@ -81,7 +80,6 @@ class ReportGenerator {
     }
 
     async generateUsersReport(config) {
-        // Загружаем данные пользователей
         await this.loadUsersData(config);
         
         if (this.reportData.length === 0) {
@@ -90,11 +88,9 @@ class ReportGenerator {
             return;
         }
         
-        // Разбиваем на части
         const chunkSize = config.chunkSize === 'all' ? this.reportData.length : parseInt(config.chunkSize);
         this.totalChunks = Math.ceil(this.reportData.length / chunkSize);
         
-        // Генерируем файлы
         for (let i = 0; i < this.totalChunks; i++) {
             this.currentChunk = i + 1;
             const startIdx = i * chunkSize;
@@ -163,14 +159,12 @@ class ReportGenerator {
             let hasMore = true;
             let allRawPayments = [];
             
-            // Загружаем все платежи без фильтрации на сервере
             while (hasMore) {
                 const params = new URLSearchParams({
                     page: page,
                     limit: limit
                 });
                 
-                // НЕ добавляем фильтры даты на сервер - будем фильтровать локально
                 console.log(`📄 Загрузка страницы ${page} всех платежей...`);
                 
                 const response = await fetch(`${this.baseUrl}/payments?${params.toString()}`, {
@@ -194,7 +188,6 @@ class ReportGenerator {
                     allRawPayments.push(...payments);
                     console.log(`✅ Загружено платежей: ${allRawPayments.length}`);
                     
-                    // Обновляем прогресс
                     const progress = Math.min(50, Math.round((page * 100) / 50));
                     this.showProgress(`Загрузка всех платежей... (${allRawPayments.length})`, progress);
                     
@@ -204,14 +197,13 @@ class ReportGenerator {
             
             console.log(`📊 Всего загружено платежей: ${allRawPayments.length}`);
             
-            // Теперь фильтруем платежи по дате локально
+            // Фильтруем платежи по дате локально
             let filteredPayments = allRawPayments;
             
-            // Фильтрация по дате
             if (config.dateStart && config.dateEnd) {
                 const startDate = new Date(config.dateStart);
                 const endDate = new Date(config.dateEnd);
-                endDate.setHours(23, 59, 59, 999); // Конец дня
+                endDate.setHours(23, 59, 59, 999);
                 
                 console.log(`📅 Фильтрация по дате: ${config.dateStart} - ${config.dateEnd}`);
                 
@@ -230,7 +222,6 @@ class ReportGenerator {
                 console.log(`✅ После фильтра по дате: ${filteredPayments.length} платежей`);
             }
             
-            // Фильтрация по статусу
             if (config.status && config.status !== 'all') {
                 filteredPayments = filteredPayments.filter(payment => 
                     payment.status === config.status
@@ -239,7 +230,6 @@ class ReportGenerator {
                 console.log(`✅ После фильтра по статусу ${config.status}: ${filteredPayments.length} платежей`);
             }
             
-            // Применяем ограничение по количеству записей
             if (config.chunkSize !== 'all') {
                 const limit = parseInt(config.chunkSize);
                 if (filteredPayments.length > limit) {
@@ -255,35 +245,10 @@ class ReportGenerator {
             throw error;
         }
         
-        // Загружаем пользователей для получения имен
         console.log('👥 Загрузка данных пользователей...');
         try {
-            const usersResponse = await fetch(`${this.baseUrl}/users?limit=1000`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            const usersMap = await this.loadUsersDetailsForPayments(token, allPayments);
             
-            if (!usersResponse.ok) {
-                throw new Error(`Ошибка загрузки пользователей: ${usersResponse.status}`);
-            }
-            
-            const usersData = await usersResponse.json();
-            const allUsers = usersData.user || usersData.users || [];
-            
-            const usersMap = {};
-            allUsers.forEach(user => {
-                usersMap[user.id] = {
-                    name: user.name || user.username || `Пользователь #${user.id}`,
-                    email: user.email || '',
-                    phone: user.phone || user.phone_number || '',
-                    tariff: user.tariff_name || user.tariff || 'Без тарифа'
-                };
-            });
-            
-            // Формируем финальные данные
             this.reportData = allPayments.map(payment => {
                 const user = usersMap[payment.user_id];
                 
@@ -311,6 +276,44 @@ class ReportGenerator {
         return this.reportData;
     }
 
+    async loadUsersDetailsForPayments(token, payments) {
+        const userIds = [...new Set(payments.map(p => p.user_id).filter(id => id))];
+        console.log(`👥 Загрузка данных для ${userIds.length} пользователей...`);
+        
+        const usersMap = {};
+        const totalUsers = userIds.length;
+        
+        for (let i = 0; i < userIds.length; i++) {
+            const userId = userIds[i];
+            
+            try {
+                const userDetails = await this.getUserDetails(userId, token);
+                if (userDetails) {
+                    usersMap[userId] = {
+                        name: userDetails.name || `Пользователь #${userId}`,
+                        email: userDetails.email || '',
+                        phone: userDetails.phone || userDetails.phone_number || '',
+                        tariff: userDetails.tariff_name || `Тариф #${userDetails.tariff_id}` || 'Без тарифа'
+                    };
+                }
+                
+                const progress = 50 + Math.round(((i + 1) / totalUsers) * 25);
+                this.showProgress(`Загрузка данных пользователей... (${i + 1}/${totalUsers})`, progress);
+                
+            } catch (error) {
+                console.warn(`⚠️ Не удалось загрузить данные пользователя ${userId}:`, error.message);
+                usersMap[userId] = {
+                    name: `Пользователь #${userId}`,
+                    email: '',
+                    phone: '',
+                    tariff: 'Неизвестно'
+                };
+            }
+        }
+        
+        return usersMap;
+    }
+
     async loadUsersData(config) {
         if (!window.authService || !window.authService.token) {
             throw new Error('Не авторизован');
@@ -328,7 +331,6 @@ class ReportGenerator {
             let hasMore = true;
             let allRawUsers = [];
             
-            // Загружаем всех пользователей
             while (hasMore) {
                 const params = new URLSearchParams({
                     page: page,
@@ -358,7 +360,6 @@ class ReportGenerator {
                     allRawUsers.push(...users);
                     console.log(`✅ Загружено пользователей: ${allRawUsers.length}`);
                     
-                    // Обновляем прогресс
                     const progress = Math.min(50, Math.round((page * 100) / 50));
                     this.showProgress(`Загрузка всех пользователей... (${allRawUsers.length})`, progress);
                     
@@ -393,21 +394,6 @@ class ReportGenerator {
                 console.log(`✅ После фильтра по дате: ${filteredUsers.length} пользователей`);
             }
             
-            // Фильтрация по тарифу
-            if (config.tariffFilter && config.tariffFilter !== 'all') {
-                if (config.tariffFilter === 'with_tariff') {
-                    filteredUsers = filteredUsers.filter(user => 
-                        user.tariff_id || user.tariff_name || user.tariff_active || user.active_tariff
-                    );
-                    console.log(`✅ Пользователей с тарифом: ${filteredUsers.length}`);
-                } else if (config.tariffFilter === 'without_tariff') {
-                    filteredUsers = filteredUsers.filter(user => 
-                        !user.tariff_id && !user.tariff_name && !user.tariff_active && !user.active_tariff
-                    );
-                    console.log(`✅ Пользователей без тарифа: ${filteredUsers.length}`);
-                }
-            }
-            
             // Ограничение по количеству
             if (config.chunkSize !== 'all') {
                 const limit = parseInt(config.chunkSize);
@@ -417,7 +403,60 @@ class ReportGenerator {
                 }
             }
             
-            allUsers.push(...filteredUsers);
+            // Загружаем детальные данные
+            console.log('🔍 Загрузка детальных данных пользователей...');
+            this.showProgress('Загрузка данных тарифов...', 75);
+            
+            const usersWithDetails = [];
+            const totalUsers = filteredUsers.length;
+            
+            for (let i = 0; i < filteredUsers.length; i++) {
+                const user = filteredUsers[i];
+                
+                // ЗДЕСЬ ИСПРАВЛЕНИЕ: используем правильный URL
+                const userDetails = await this.getUserDetails(user.id, token);
+                
+                if (userDetails) {
+                    const combinedUser = {
+                        ...user,
+                        ...userDetails,
+                        name: userDetails.name || user.name || user.username,
+                        email: userDetails.email || user.email,
+                        phone: userDetails.phone || user.phone,
+                        balance: userDetails.balance || user.balance
+                    };
+                    
+                    usersWithDetails.push(combinedUser);
+                } else {
+                    usersWithDetails.push(user);
+                }
+                
+                const progress = 75 + Math.round(((i + 1) / totalUsers) * 25);
+                this.showProgress(`Загрузка данных пользователей... (${i + 1}/${totalUsers})`, progress);
+            }
+            
+            console.log(`✅ Загружено детальных данных: ${usersWithDetails.length} пользователей`);
+            
+            // Фильтрация по тарифу
+            let finalUsers = usersWithDetails;
+            
+            if (config.tariffFilter && config.tariffFilter !== 'all') {
+                console.log('🔍 Применяем фильтр по тарифу:', config.tariffFilter);
+                
+                if (config.tariffFilter === 'with_tariff') {
+                    finalUsers = usersWithDetails.filter(user => 
+                        user.tariff_id || user.tariff_name
+                    );
+                    console.log(`✅ Пользователей с тарифом: ${finalUsers.length}`);
+                } else if (config.tariffFilter === 'without_tariff') {
+                    finalUsers = usersWithDetails.filter(user => 
+                        !user.tariff_id && !user.tariff_name
+                    );
+                    console.log(`✅ Пользователей без тарифа: ${finalUsers.length}`);
+                }
+            }
+            
+            allUsers.push(...finalUsers);
             
         } catch (error) {
             console.error('Ошибка загрузки пользователей:', error);
@@ -426,28 +465,7 @@ class ReportGenerator {
         
         // Формируем финальные данные
         this.reportData = allUsers.map(user => {
-            // Определяем статус тарифа - более точная логика
-            let tariffStatus = 'Неактивен';
-            let hasTariff = false;
-            
-            // Проверяем все возможные поля, указывающие на наличие тарифа
-            if (user.tariff_id || user.tariff_name || user.tariff || 
-                user.tariff_active === true || user.active_tariff === true ||
-                (user.tariff && user.tariff !== 'Без тарифа')) {
-                hasTariff = true;
-            }
-            
-            // Проверяем статус активности тарифа
-            if (hasTariff) {
-                if (user.tariff_active === true || user.active_tariff === true) {
-                    tariffStatus = 'Активен';
-                } else if (user.tariff_active === false || user.active_tariff === false) {
-                    tariffStatus = 'Неактивен';
-                } else {
-                    // Если явного статуса нет, но есть тариф - считаем активным
-                    tariffStatus = 'Активен';
-                }
-            }
+            const tariffInfo = this.getUserTariffInfo(user);
             
             return {
                 id: user.id || '-',
@@ -455,8 +473,8 @@ class ReportGenerator {
                 email: user.email || '',
                 phone: user.phone || user.phone_number || '',
                 balance: parseFloat(user.balance) || 0,
-                tariff: user.tariff_name || user.tariff || 'Без тарифа',
-                tariff_status: tariffStatus,
+                tariff: tariffInfo.tariffName,
+                tariff_status: tariffInfo.tariffStatus,
                 registration_date: user.created_at ? 
                     new Date(user.created_at).toLocaleDateString('ru-RU') : ''
             };
@@ -467,11 +485,122 @@ class ReportGenerator {
         return this.reportData;
     }
 
+    async getUserDetails(userId, token) {
+        try {
+            // ИСПРАВЛЕНИЕ: используем правильный URL без /admin
+            const response = await fetch(`http://localhost:8080/api/v1/auth/${userId}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                console.warn(`⚠️ Не удалось загрузить данные пользователя ${userId}: ${response.status}`);
+                return null;
+            }
+            
+            const data = await response.json();
+            return data.user || data;
+            
+        } catch (error) {
+            console.warn(`⚠️ Ошибка загрузки пользователя ${userId}:`, error.message);
+            return null;
+        }
+    }
+
+    async loadTariffsMap(token) {
+        try {
+            const response = await fetch(`${this.baseUrl}/tariffs?limit=100`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const tariffs = data.tariffs || data.data || [];
+                
+                const tariffMap = {};
+                tariffs.forEach(tariff => {
+                    if (tariff.id && tariff.name) {
+                        tariffMap[tariff.id] = tariff.name;
+                    }
+                });
+                
+                console.log('✅ Загружен словарь тарифов:', tariffMap);
+                return tariffMap;
+            }
+        } catch (error) {
+            console.warn('⚠️ Не удалось загрузить тарифы:', error.message);
+        }
+        
+        return null;
+    }
+
+    getTariffNameById(tariffId) {
+        if (this.tariffMap && this.tariffMap[tariffId]) {
+            return this.tariffMap[tariffId];
+        }
+        
+        const defaultTariffMap = {
+            1: 'Базовый',
+            2: 'Стандартный', 
+            3: 'Премиум',
+            4: 'Бизнес',
+            5: 'Безлимитный',
+            6: 'Эконом',
+            7: 'Оптимальный',
+            8: 'Максимальный'
+        };
+        
+        return defaultTariffMap[tariffId] || `Тариф #${tariffId}`;
+    }
+
+    // ВАЖНО: этот метод должен быть внутри класса
+    getUserTariffInfo(user) {
+        let tariffName = 'Без тарифа';
+        let tariffStatus = 'Неактивен';
+        
+        if (!user) {
+            return { tariffName, tariffStatus };
+        }
+        
+        // Проверяем наличие tariff_id
+        if (user.tariff_id) {
+            tariffStatus = 'Активен';
+            
+            if (user.tariff_name) {
+                tariffName = user.tariff_name;
+            } else {
+                tariffName = this.getTariffNameById(user.tariff_id);
+            }
+            
+            if (user.accountn && user.balance > 0) {
+                tariffStatus = 'Активен';
+            }
+        }
+        else if (user.tariff_name) {
+            tariffName = user.tariff_name;
+            tariffStatus = 'Активен';
+        }
+        else if (user.accountn && user.balance > 100) {
+            tariffName = 'Тариф (не указан)';
+            tariffStatus = 'Активен';
+        }
+        
+        console.log(`✅ Пользователь ${user.id}: Тариф "${tariffName}", Статус: "${tariffStatus}"`);
+        
+        return { tariffName, tariffStatus };
+    }
+
     async createPaymentsExcelFile(data, chunkNumber) {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Платежи');
         
-        // Настройка колонок
         worksheet.columns = [
             { header: 'ID платежа', key: 'id', width: 15 },
             { header: 'Дата и время', key: 'payment_date', width: 20 },
@@ -484,7 +613,6 @@ class ReportGenerator {
             { header: 'Описание', key: 'description', width: 30 }
         ];
         
-        // Заголовок
         const headerRow = worksheet.getRow(1);
         headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
         headerRow.fill = {
@@ -494,16 +622,13 @@ class ReportGenerator {
         };
         headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
         
-        // Данные
         data.forEach(item => {
             worksheet.addRow(item);
         });
         
-        // Форматирование колонки с суммами
         worksheet.getColumn('amount').numFmt = '#,##0.00 ₽';
         worksheet.getColumn('amount').alignment = { horizontal: 'right' };
         
-        // Итоговая строка
         if (data.length > 0) {
             const totalRow = worksheet.addRow({});
             totalRow.getCell('user_name').value = 'ИТОГО:';
@@ -515,7 +640,6 @@ class ReportGenerator {
             totalRow.getCell('amount').font = { bold: true };
         }
         
-        // Информация об отчете
         worksheet.addRow({});
         const titleRow = worksheet.addRow({});
         titleRow.getCell('user_name').value = 'ОТЧЕТ ПО ПЛАТЕЖАМ';
@@ -534,7 +658,6 @@ class ReportGenerator {
             periodRow.getCell('status').value = 
                 `${this.reportConfig.dateStart} — ${this.reportConfig.dateEnd}`;
             
-            // Добавляем информацию о количестве дней в периоде
             worksheet.addRow({});
             const daysRow = worksheet.addRow({});
             const startDate = new Date(this.reportConfig.dateStart);
@@ -552,50 +675,6 @@ class ReportGenerator {
             statusRow.getCell('status').value = this.getStatusText(this.reportConfig.status);
         }
         
-        // Статистика
-        worksheet.addRow({});
-        const statsTitleRow = worksheet.addRow({});
-        statsTitleRow.getCell('user_name').value = 'СТАТИСТИКА:';
-        statsTitleRow.getCell('user_name').font = { bold: true, size: 12 };
-        
-        worksheet.addRow({});
-        const countRow = worksheet.addRow({});
-        countRow.getCell('user_name').value = 'Всего записей в отчете:';
-        countRow.getCell('status').value = data.length;
-        countRow.getCell('status').font = { bold: true };
-        
-        if (data.length > 0) {
-            // Средний платеж
-            const totalAmount = data.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-            const avgPayment = totalAmount / data.length;
-            
-            worksheet.addRow({});
-            const avgRow = worksheet.addRow({});
-            avgRow.getCell('user_name').value = 'Средний платеж:';
-            avgRow.getCell('status').value = avgPayment.toFixed(2) + ' ₽';
-            avgRow.getCell('status').font = { bold: true };
-            
-            // Статистика по статусам
-            const statusCounts = {};
-            data.forEach(item => {
-                const status = item.status || 'Неизвестно';
-                statusCounts[status] = (statusCounts[status] || 0) + 1;
-            });
-            
-            worksheet.addRow({});
-            const statusTitleRow = worksheet.addRow({});
-            statusTitleRow.getCell('user_name').value = 'Распределение по статусам:';
-            statusTitleRow.getCell('user_name').font = { italic: true };
-            
-            Object.entries(statusCounts).forEach(([status, count]) => {
-                const percent = ((count / data.length) * 100).toFixed(1);
-                const statusRow = worksheet.addRow({});
-                statusRow.getCell('user_name').value = `- ${status}:`;
-                statusRow.getCell('status').value = `${count} (${percent}%)`;
-            });
-        }
-        
-        // Сохраняем файл
         await this.saveWorkbook(workbook, 'payments', chunkNumber);
     }
 
@@ -603,7 +682,6 @@ class ReportGenerator {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Пользователи');
         
-        // Настройка колонок (убран last_login)
         worksheet.columns = [
             { header: 'ID', key: 'id', width: 10 },
             { header: 'Имя', key: 'name', width: 25 },
@@ -615,7 +693,6 @@ class ReportGenerator {
             { header: 'Дата регистрации', key: 'registration_date', width: 15 }
         ];
         
-        // Заголовок
         const headerRow = worksheet.getRow(1);
         headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
         headerRow.fill = {
@@ -625,8 +702,8 @@ class ReportGenerator {
         };
         headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
         
-        // Данные
         data.forEach(user => {
+            console.log(`📝 Запись в отчет: Пользователь ${user.id} - Тариф: "${user.tariff}", Статус: "${user.tariff_status}"`);
             worksheet.addRow({
                 id: user.id,
                 name: user.name,
@@ -639,52 +716,22 @@ class ReportGenerator {
             });
         });
         
-        // Форматирование
         worksheet.getColumn('balance').numFmt = '#,##0.00 ₽';
         worksheet.getColumn('balance').alignment = { horizontal: 'right' };
         
-        // Статистика
         const totalUsers = data.length;
         const totalBalance = data.reduce((sum, user) => sum + (parseFloat(user.balance) || 0), 0);
         const activeTariffs = data.filter(user => user.tariff_status === 'Активен').length;
         const inactiveTariffs = data.filter(user => user.tariff_status === 'Неактивен').length;
         
-        worksheet.addRow({});
-        const statsRow = worksheet.addRow({});
-        statsRow.getCell('name').value = 'СТАТИСТИКА:';
-        statsRow.getCell('name').font = { bold: true, size: 12 };
+        console.log(`📊 Статистика отчета: Всего: ${totalUsers}, Активных: ${activeTariffs}, Неактивных: ${inactiveTariffs}`);
         
         worksheet.addRow({});
-        const totalUsersRow = worksheet.addRow({});
-        totalUsersRow.getCell('name').value = 'Всего пользователей:';
-        totalUsersRow.getCell('balance').value = totalUsers;
-        totalUsersRow.getCell('balance').font = { bold: true };
+        const titleRow = worksheet.addRow({});
+        titleRow.getCell('name').value = 'ОТЧЕТ ПО ПОЛЬЗОВАТЕЛЯМ';
+        titleRow.getCell('name').font = { bold: true, size: 14 };
+        titleRow.getCell('registration_date').value = new Date().toLocaleDateString('ru-RU');
         
-        const totalBalanceRow = worksheet.addRow({});
-        totalBalanceRow.getCell('name').value = 'Общий баланс:';
-        totalBalanceRow.getCell('balance').value = totalBalance;
-        totalBalanceRow.getCell('balance').numFmt = '#,##0.00 ₽';
-        totalBalanceRow.getCell('balance').font = { bold: true };
-        
-        const activeTariffsRow = worksheet.addRow({});
-        activeTariffsRow.getCell('name').value = 'Активных тарифов:';
-        activeTariffsRow.getCell('balance').value = activeTariffs;
-        activeTariffsRow.getCell('balance').font = { bold: true };
-        
-        const inactiveTariffsRow = worksheet.addRow({});
-        inactiveTariffsRow.getCell('name').value = 'Неактивных тарифов:';
-        inactiveTariffsRow.getCell('balance').value = inactiveTariffs;
-        inactiveTariffsRow.getCell('balance').font = { bold: true };
-        
-        if (activeTariffs > 0) {
-            const percentActive = Math.round((activeTariffs / totalUsers) * 100);
-            const percentRow = worksheet.addRow({});
-            percentRow.getCell('name').value = 'Процент активных:';
-            percentRow.getCell('balance').value = `${percentActive}%`;
-            percentRow.getCell('balance').font = { bold: true };
-        }
-        
-        // Информация об отчете
         worksheet.addRow({});
         const infoRow = worksheet.addRow({});
         infoRow.getCell('name').value = 'Сформировано:';
@@ -706,14 +753,35 @@ class ReportGenerator {
                 this.reportConfig.tariffFilter === 'with_tariff' ? 'С тарифом' : 'Без тарифа';
         }
         
-        // Сохраняем файл
+        worksheet.addRow({});
+        const statsTitleRow = worksheet.addRow({});
+        statsTitleRow.getCell('name').value = 'ДЕТАЛЬНАЯ СТАТИСТИКА:';
+        statsTitleRow.getCell('name').font = { bold: true, size: 12 };
+        
+        worksheet.addRow({});
+        const totalUsersRow = worksheet.addRow({});
+        totalUsersRow.getCell('name').value = 'Всего пользователей:';
+        totalUsersRow.getCell('balance').value = totalUsers;
+        totalUsersRow.getCell('balance').font = { bold: true };
+        
+        const totalBalanceRow = worksheet.addRow({});
+        totalBalanceRow.getCell('name').value = 'Общий баланс:';
+        totalBalanceRow.getCell('balance').value = totalBalance;
+        totalBalanceRow.getCell('balance').numFmt = '#,##0.00 ₽';
+        totalBalanceRow.getCell('balance').font = { bold: true };
+        
+        const avgBalanceRow = worksheet.addRow({});
+        avgBalanceRow.getCell('name').value = 'Средний баланс:';
+        avgBalanceRow.getCell('balance').value = totalUsers > 0 ? (totalBalance / totalUsers).toFixed(2) : 0;
+        avgBalanceRow.getCell('balance').numFmt = '#,##0.00 ₽';
+        avgBalanceRow.getCell('balance').font = { bold: true };
+        
         await this.saveWorkbook(workbook, 'users', chunkNumber);
     }
 
     async createCombinedExcelFile(paymentsData, usersData, config) {
         const workbook = new ExcelJS.Workbook();
         
-        // Лист с платежами
         if (config.includePayments && paymentsData.length > 0) {
             const paymentsSheet = workbook.addWorksheet('Платежи');
             paymentsSheet.columns = [
@@ -741,7 +809,6 @@ class ReportGenerator {
             
             paymentsSheet.getColumn('amount').numFmt = '#,##0.00 ₽';
             
-            // Итоги по платежам
             if (paymentsData.length > 0) {
                 const totalAmount = paymentsData.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
                 paymentsSheet.addRow({});
@@ -754,7 +821,6 @@ class ReportGenerator {
             }
         }
         
-        // Лист с пользователями
         if (config.includeUsers && usersData.length > 0) {
             const usersSheet = workbook.addWorksheet('Пользователи');
             usersSheet.columns = [
@@ -785,49 +851,6 @@ class ReportGenerator {
             });
             
             usersSheet.getColumn('balance').numFmt = '#,##0.00 ₽';
-        }
-        
-        // Лист со статистикой
-        if (config.includeStats) {
-            const statsSheet = workbook.addWorksheet('Статистика');
-            statsSheet.columns = [
-                { header: 'Показатель', key: 'indicator', width: 30 },
-                { header: 'Значение', key: 'value', width: 20 }
-            ];
-            
-            const statsHeader = statsSheet.getRow(1);
-            statsHeader.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-            statsHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF9C27B0' } };
-            statsHeader.alignment = { vertical: 'middle', horizontal: 'center' };
-            
-            const totalPayments = paymentsData.length;
-            const totalRevenue = paymentsData.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
-            const totalUsers = usersData.length;
-            const totalBalance = usersData.reduce((sum, u) => sum + (parseFloat(u.balance) || 0), 0);
-            const activeUsers = usersData.filter(u => u.tariff_status === 'Активен').length;
-            
-            const stats = [
-                { indicator: 'Общая статистика за период', value: '' },
-                { indicator: 'Период отчета', value: `${config.dateStart} — ${config.dateEnd}` },
-                { indicator: '', value: '' },
-                { indicator: 'Пользователи:', value: '' },
-                { indicator: 'Всего пользователей', value: totalUsers },
-                { indicator: 'Активных пользователей', value: activeUsers },
-                { indicator: 'Процент активности', value: totalUsers > 0 ? `${Math.round((activeUsers / totalUsers) * 100)}%` : '0%' },
-                { indicator: 'Общий баланс', value: totalBalance },
-                { indicator: 'Средний баланс', value: totalUsers > 0 ? (totalBalance / totalUsers).toFixed(2) : '0.00' },
-                { indicator: '', value: '' },
-                { indicator: 'Платежи:', value: '' },
-                { indicator: 'Всего платежей', value: totalPayments },
-                { indicator: 'Общая выручка', value: totalRevenue },
-                { indicator: 'Средний платеж', value: totalPayments > 0 ? (totalRevenue / totalPayments).toFixed(2) : '0.00' },
-                { indicator: '', value: '' },
-                { indicator: 'Дата формирования', value: new Date().toLocaleString('ru-RU') }
-            ];
-            
-            stats.forEach(stat => {
-                statsSheet.addRow(stat);
-            });
         }
         
         const dateStr = new Date().toISOString().split('T')[0];
@@ -870,6 +893,7 @@ class ReportGenerator {
         window.URL.revokeObjectURL(url);
     }
 
+    // Этот метод тоже должен быть внутри класса
     getStatusText(status) {
         const statusMap = {
             'completed': 'Успешно',
@@ -912,23 +936,20 @@ class ReportGenerator {
     }
 }
 
-// Глобальные функции для работы с отчетами
+// Глобальные функции для работы с отчетами (вне класса)
 window.reportGenerator = new ReportGenerator();
 
 function showReportModal(type = 'payments') {
     const modal = document.getElementById('reportModal');
     if (!modal) return;
     
-    // Устанавливаем даты по умолчанию (последние 30 дней)
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
     
-    // Общие поля
     document.getElementById('reportType').value = type;
     document.getElementById('reportChunkSize').value = 'all';
     
-    // Устанавливаем даты в зависимости от типа
     if (type === 'payments') {
         document.getElementById('reportDateStart').value = startDate.toISOString().split('T')[0];
         document.getElementById('reportDateEnd').value = endDate.toISOString().split('T')[0];
@@ -1011,7 +1032,6 @@ async function generateReport() {
             const userDateStart = document.getElementById('userDateStart').value;
             const userDateEnd = document.getElementById('userDateEnd').value;
             
-            // Даты для пользователей - необязательные
             if (userDateStart && userDateEnd && new Date(userDateStart) > new Date(userDateEnd)) {
                 alert('Дата начала не может быть позже даты окончания');
                 return;
@@ -1054,7 +1074,6 @@ async function generateReport() {
     await reportGenerator.generateExcelReport(config);
 }
 
-// Закрытие модальных окон по клику вне их
 window.addEventListener('click', function(event) {
     const reportModal = document.getElementById('reportModal');
     const progressModal = document.getElementById('reportProgressModal');
@@ -1067,3 +1086,21 @@ window.addEventListener('click', function(event) {
         // Не закрываем окно прогресса по клику вне его
     }
 });
+
+// Тестовая функция для проверки тарифов
+window.testTariffCheck = async function(userId) {
+    const token = window.authService.token;
+    const response = await fetch(`http://localhost:8080/api/v1/auth/${userId}`, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    });
+    
+    if (response.ok) {
+        const user = await response.json();
+        console.log('Данные пользователя:', user);
+        console.log('Есть ли тариф?', window.reportGenerator.getUserTariffInfo(user));
+    }
+};
