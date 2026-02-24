@@ -83,10 +83,8 @@ class PaymentsAPI {
         const searchLower = searchText.toLowerCase();
         return this.allUsers.filter(user => {
             const name = (user.name || user.username || '').toLowerCase();
-            const email = (user.email || '').toLowerCase();
             
             return name.includes(searchLower) || 
-                   email.includes(searchLower) ||
                    user.id.toString().includes(searchText);
         });
     }
@@ -211,20 +209,8 @@ class PaymentsUI {
                 // Поиск по имени пользователя
                 if (user.name.toLowerCase().includes(searchLower)) return true;
                 
-                // Поиск по email пользователя
-                if (user.email.toLowerCase().includes(searchLower)) return true;
-                
-                // Поиск по телефону пользователя
-                if (user.phone.includes(searchLower)) return true;
-                
-                // Поиск по ID пользователя
-                if (payment.user_id.toString().includes(searchLower)) return true;
-                
                 // Поиск по ID платежа
                 if (payment.id && payment.id.toString().includes(searchLower)) return true;
-                
-                // Поиск по сумме
-                if (payment.amount && payment.amount.toString().includes(searchLower)) return true;
                 
                 return false;
             });
@@ -323,9 +309,6 @@ class PaymentsUI {
                         <div style="font-weight: 500; margin-bottom: 4px;">${user.name}</div>
                         <div style="font-size: 12px; color: #666;">
                             <span>ID: ${payment.user_id}</span>
-                            ${userEmail}
-                            ${userPhone}
-                            ${userTariff}
                         </div>
                     </td>
                     <td>
@@ -464,8 +447,8 @@ function initPaymentsTabHandlers() {
     
     // Обновляем placeholder для поиска
     if (searchInput) {
-        searchInput.placeholder = 'Поиск по имени, email, телефону или ID...';
-        searchInput.title = 'Ищите по: имени пользователя, email, телефону, ID пользователя, ID платежа';
+        searchInput.placeholder = 'Поиск по имени или ID...';
+        searchInput.title = 'Ищите по: имени пользователя или ID платежа';
     }
     
     // Кнопка очистки

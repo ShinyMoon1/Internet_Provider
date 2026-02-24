@@ -125,48 +125,38 @@ class AdminAPI {
 class AdminUI {
     constructor() {
         this.api = new AdminAPI();
-        this.allUsers = []; // Кэш пользователей для поиска
+        this.allUsers = [];
     }
 
     async loadDashboard() {
         try {
             console.log('📊 Загружаем дашборд...');
             
-            // Загружаем статистику с API
             const stats = await this.api.getDashboardStats();
             console.log('📈 Статистика API:', stats);
             
-            // Показываем базовую статистику
             this.updateElement('totalUsers', stats.total_users || 0);
             this.updateElement('totalPayments', stats.total_payments || 0);
             this.updateElement('totalRevenue', `${stats.total_revenue || 0} ₽`);
             this.updateElement('activeTariffs', stats.active_tariffs || 0);
             
-            // Если статистика пустая или неполная, рассчитываем сами
             if (!stats.total_payments || !stats.total_revenue || !stats.active_tariffs) {
                 console.log('⚠️ Статистика неполная, загружаем детальные данные...');
                 await this.calculateDetailedStats();
             }
             
-            // Загружаем пользователей для отображения имен
             await this.loadUsersForDashboard();
-            
-            // Загружаем последние платежи с именами пользователей
             await this.loadRecentPayments();
-            
-            // Загружаем новых пользователей
             await this.loadRecentUsers();
             
         } catch (error) {
             console.error('Ошибка дашборда:', error);
             
-            // Показываем заглушки
             this.updateElement('totalUsers', '0');
             this.updateElement('totalPayments', '0');
             this.updateElement('totalRevenue', '0 ₽');
             this.updateElement('activeTariffs', '0');
             
-            // Пробуем загрузить данные для расчета
             try {
                 await this.calculateDetailedStats();
             } catch (calcError) {
@@ -187,17 +177,14 @@ class AdminUI {
         }
     }
 
-    // Найти пользователя по ID
     findUserById(userId) {
         if (!this.allUsers.length) return null;
         return this.allUsers.find(user => user.id == userId);
     }
 
-    // Получить имя пользователя по ID
     getUserNameById(userId) {
         const user = this.findUserById(userId);
         if (!user) return `Пользователь #${userId}`;
-        
         return user.name || user.username || user.full_name || `Пользователь #${userId}`;
     }
 
@@ -205,28 +192,22 @@ class AdminUI {
         try {
             console.log('🧮 Рассчитываем детальную статистику...');
             
-            // Загружаем все платежи
             const paymentsData = await this.api.getAllPayments();
             const allPayments = paymentsData.payments || paymentsData.data || [];
             console.log(`📊 Всего платежей в системе: ${allPayments.length}`);
             
-            // Рассчитываем общее количество платежей
             const totalPayments = allPayments.length;
             
-            // Рассчитываем общий доход (сумма всех платежей)
             const totalRevenue = allPayments.reduce((sum, payment) => {
                 return sum + (parseFloat(payment.amount) || 0);
             }, 0);
             
-            // Загружаем всех пользователей для подсчета активных тарифов
             if (this.allUsers.length === 0) {
                 const usersData = await this.api.getAllUsers();
                 this.allUsers = usersData.user || usersData.users || [];
             }
             
-            // Подсчитываем активные тарифы
             const activeTariffs = this.allUsers.filter(user => {
-                // Проверяем наличие тарифа
                 return user.tariff_id || 
                        user.tariff_active || 
                        user.active_tariff || 
@@ -240,7 +221,6 @@ class AdminUI {
                 totalUsers: this.allUsers.length
             });
             
-            // Обновляем данные на дашборде
             this.updateElement('totalPayments', totalPayments);
             this.updateElement('totalRevenue', `${Math.round(totalRevenue)} ₽`);
             this.updateElement('activeTariffs', activeTariffs);
@@ -254,15 +234,12 @@ class AdminUI {
 
     async loadRecentPayments() {
         try {
-            // Загружаем все платежи
             const paymentsData = await this.api.getAllPayments();
             const payments = paymentsData.payments || [];
             
-            // Загружаем всех пользователей для получения имен
             const usersData = await this.api.getAllUsers();
             const allUsers = usersData.user || usersData.users || [];
             
-            // Создаем мап пользователей по ID для быстрого поиска
             const usersMap = {};
             allUsers.forEach(user => {
                 usersMap[user.id] = {
@@ -271,7 +248,6 @@ class AdminUI {
                 };
             });
             
-            // Берем 5 последних платежей
             const recentPayments = payments
                 .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
                 .slice(0, 5);
@@ -292,7 +268,6 @@ class AdminUI {
                 `;
             } else {
                 recentPayments.forEach(payment => {
-                    // Получаем пользователя из мапа
                     const user = usersMap[payment.user_id];
                     const userName = user ? user.name : 
                                 (payment.user_id ? `Пользователь #${payment.user_id}` : 'Неизвестно');
@@ -333,7 +308,7 @@ class AdminUI {
                 `;
             }
         }
-}
+    }
 
     async loadRecentUsers() {
         try {
@@ -342,14 +317,12 @@ class AdminUI {
                 this.allUsers = data.user || data.users || [];
             }
             
-            // Берем 5 последних пользователей
             const recentUsers = [...this.allUsers]
                 .sort((a, b) => {
-                    // Сортируем по дате создания или по ID (новые сначала)
                     const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
                     const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
                     if (dateA.getTime() === dateB.getTime()) {
-                        return (b.id || 0) - (a.id || 0); // По ID если нет даты
+                        return (b.id || 0) - (a.id || 0);
                     }
                     return dateB - dateA;
                 })
@@ -460,13 +433,31 @@ class AdminUI {
                 this.showNoUsers();
                 return;
             }
+
+            // Сортируем по ID — по порядку
+            const sorted = [...usersArray].sort((a, b) => (a.id || 0) - (b.id || 0));
             
-            this.renderUsersTable(usersArray);
+            this.renderUsersTable(sorted);
+
+            // Оборачиваем таблицу в скролл-контейнер (один раз)
+            this._wrapInScroll(tableBody);
             
         } catch (error) {
             console.error('Ошибка загрузки:', error);
             this.showError('Не удалось загрузить пользователей: ' + error.message);
         }
+    }
+
+    // Оборачивает таблицу в div со скроллом, если ещё не обёрнута
+    _wrapInScroll(tableBody) {
+        const table = tableBody.closest('table');
+        if (!table) return;
+        if (table.parentElement.classList.contains('users-scroll-wrap')) return;
+
+        const wrap = document.createElement('div');
+        wrap.className = 'users-scroll-wrap';
+        table.parentNode.insertBefore(wrap, table);
+        wrap.appendChild(table);
     }
 
     renderUsersTable(users) {
@@ -550,13 +541,11 @@ window.initializeAdminPanel = async function() {
     console.log('🚀 Инициализация админ-панели...');
     
     try {
-        // Обновляем имя администратора
         const adminName = document.getElementById('adminName');
         if (adminName && window.authService && window.authService.adminData) {
             adminName.textContent = window.authService.adminData.username || 'Администратор';
         }
         
-        // Загружаем данные для активной вкладки
         const activeTab = document.querySelector('.tab-content.active');
         if (activeTab && activeTab.id === 'dashboard') {
             await adminUI.loadDashboard();

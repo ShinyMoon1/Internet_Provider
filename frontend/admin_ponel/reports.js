@@ -1,16 +1,10 @@
-// reports.js - Формирование отчетов в Excel (исправленная версия)
+// reports.js - Упрощенный комбинированный отчет
 class ReportGenerator {
     constructor() {
         this.baseUrl = 'http://localhost:8080/api/v1/admin';
         this.isGenerating = false;
-        this.currentChunk = 1;
-        this.totalChunks = 1;
-        this.reportData = [];
-        this.reportConfig = {};
-        this.tariffMap = null;
     }
 
-    // Методы класса должны быть определены так
     async generateExcelReport(config) {
         try {
             if (this.isGenerating) {
@@ -20,7 +14,6 @@ class ReportGenerator {
 
             this.isGenerating = true;
             this.reportConfig = config;
-            this.currentChunk = 1;
             
             this.showProgress('Подготовка данных...', 0);
             
@@ -47,96 +40,22 @@ class ReportGenerator {
         }
     }
 
-    async generatePaymentsReport(config) {
-        await this.loadPaymentsData(config);
-        
-        if (this.reportData.length === 0) {
-            this.hideProgress();
-            alert('Нет данных для формирования отчета за выбранный период');
-            return;
-        }
-        
-        const chunkSize = config.chunkSize === 'all' ? this.reportData.length : parseInt(config.chunkSize);
-        this.totalChunks = Math.ceil(this.reportData.length / chunkSize);
-        
-        for (let i = 0; i < this.totalChunks; i++) {
-            this.currentChunk = i + 1;
-            const startIdx = i * chunkSize;
-            const endIdx = Math.min(startIdx + chunkSize, this.reportData.length);
-            const chunkData = this.reportData.slice(startIdx, endIdx);
-            
-            const progress = Math.round(((i + 1) / this.totalChunks) * 100);
-            this.showProgress(`Формирование платежей ${this.currentChunk}/${this.totalChunks}`, progress);
-            
-            await this.createPaymentsExcelFile(chunkData, this.currentChunk);
-            
-            if (i < this.totalChunks - 1) {
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
-        }
-        
-        this.hideProgress();
-        alert(`Отчет по платежам сформирован! Файлов: ${this.totalChunks}`);
-    }
-
-    async generateUsersReport(config) {
-        await this.loadUsersData(config);
-        
-        if (this.reportData.length === 0) {
-            this.hideProgress();
-            alert('Нет данных для формирования отчета по пользователям');
-            return;
-        }
-        
-        const chunkSize = config.chunkSize === 'all' ? this.reportData.length : parseInt(config.chunkSize);
-        this.totalChunks = Math.ceil(this.reportData.length / chunkSize);
-        
-        for (let i = 0; i < this.totalChunks; i++) {
-            this.currentChunk = i + 1;
-            const startIdx = i * chunkSize;
-            const endIdx = Math.min(startIdx + chunkSize, this.reportData.length);
-            const chunkData = this.reportData.slice(startIdx, endIdx);
-            
-            const progress = Math.round(((i + 1) / this.totalChunks) * 100);
-            this.showProgress(`Формирование пользователей ${this.currentChunk}/${this.totalChunks}`, progress);
-            
-            await this.createUsersExcelFile(chunkData, this.currentChunk);
-            
-            if (i < this.totalChunks - 1) {
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
-        }
-        
-        this.hideProgress();
-        alert(`Отчет по пользователям сформирован! Файлов: ${this.totalChunks}`);
-    }
-
     async generateCombinedReport(config) {
-        this.showProgress('Загрузка данных...', 25);
+        this.showProgress('Загрузка платежей...', 20);
+        const paymentsData = await this.loadPaymentsData(config);
         
-        const promises = [];
-        let paymentsData = [];
-        let usersData = [];
+        this.showProgress('Загрузка пользователей...', 60);
+        const usersData = await this.loadUsersData(config);
         
-        if (config.includePayments) {
-            promises.push(this.loadPaymentsData(config).then(data => paymentsData = data));
-        }
-        
-        if (config.includeUsers) {
-            promises.push(this.loadUsersData(config).then(data => usersData = data));
-        }
-        
-        await Promise.all(promises);
-        
-        this.showProgress('Формирование отчета...', 75);
+        this.showProgress('Формирование отчета...', 80);
         
         if (paymentsData.length === 0 && usersData.length === 0) {
             this.hideProgress();
-            alert('Нет данных для формирования комбинированного отчета');
+            alert('Нет данных для формирования отчета');
             return;
         }
         
-        await this.createCombinedExcelFile(paymentsData, usersData, config);
+        await this.createSimpleCombinedExcel(paymentsData, usersData, config);
         
         this.hideProgress();
         alert('Комбинированный отчет успешно сформирован!');
@@ -150,22 +69,16 @@ class ReportGenerator {
         const token = window.authService.token;
         const allPayments = [];
         
-        console.log('📤 Загрузка платежей для отчета...', config);
-        
         try {
-            // Загружаем ВСЕ платежи сначала
             let page = 1;
             const limit = 100;
             let hasMore = true;
-            let allRawPayments = [];
             
             while (hasMore) {
                 const params = new URLSearchParams({
                     page: page,
                     limit: limit
                 });
-                
-                console.log(`📄 Загрузка страницы ${page} всех платежей...`);
                 
                 const response = await fetch(`${this.baseUrl}/payments?${params.toString()}`, {
                     method: 'GET',
@@ -185,129 +98,71 @@ class ReportGenerator {
                 if (payments.length === 0) {
                     hasMore = false;
                 } else {
-                    allRawPayments.push(...payments);
-                    console.log(`✅ Загружено платежей: ${allRawPayments.length}`);
-                    
-                    const progress = Math.min(50, Math.round((page * 100) / 50));
-                    this.showProgress(`Загрузка всех платежей... (${allRawPayments.length})`, progress);
-                    
+                    allPayments.push(...payments);
                     page++;
                 }
             }
             
-            console.log(`📊 Всего загружено платежей: ${allRawPayments.length}`);
-            
-            // Фильтруем платежи по дате локально
-            let filteredPayments = allRawPayments;
-            
+            // Фильтрация по дате
+            let filteredPayments = allPayments;
             if (config.dateStart && config.dateEnd) {
                 const startDate = new Date(config.dateStart);
                 const endDate = new Date(config.dateEnd);
                 endDate.setHours(23, 59, 59, 999);
                 
-                console.log(`📅 Фильтрация по дате: ${config.dateStart} - ${config.dateEnd}`);
-                
-                filteredPayments = allRawPayments.filter(payment => {
+                filteredPayments = allPayments.filter(payment => {
                     if (!payment.created_at) return false;
-                    
                     try {
                         const paymentDate = new Date(payment.created_at);
                         return paymentDate >= startDate && paymentDate <= endDate;
                     } catch (error) {
-                        console.error('Ошибка парсинга даты платежа:', payment.created_at);
                         return false;
                     }
                 });
+            }
+            
+            // Загружаем данные пользователей для платежей
+            const usersMap = await this.loadUsersForPayments(token, filteredPayments);
+            
+            return filteredPayments.map(payment => {
+                const user = usersMap[payment.user_id];
                 
-                console.log(`✅ После фильтра по дате: ${filteredPayments.length} платежей`);
-            }
-            
-            if (config.status && config.status !== 'all') {
-                filteredPayments = filteredPayments.filter(payment => 
-                    payment.status === config.status
-                );
-                
-                console.log(`✅ После фильтра по статусу ${config.status}: ${filteredPayments.length} платежей`);
-            }
-            
-            if (config.chunkSize !== 'all') {
-                const limit = parseInt(config.chunkSize);
-                if (filteredPayments.length > limit) {
-                    filteredPayments = filteredPayments.slice(0, limit);
-                    console.log(`✂️ Ограничение до ${limit} записей: ${filteredPayments.length}`);
-                }
-            }
-            
-            allPayments.push(...filteredPayments);
+                return {
+                    id: payment.id || '-',
+                    date: payment.created_at ? 
+                        new Date(payment.created_at).toLocaleDateString('ru-RU') : '',
+                    time: payment.created_at ? 
+                        new Date(payment.created_at).toLocaleTimeString('ru-RU') : '',
+                    user_id: payment.user_id || '-',
+                    user_name: user ? user.name : '',
+                    amount: parseFloat(payment.amount) || 0,
+                    status: this.getSimpleStatus(payment.status),
+                    description: payment.description || '',
+                    user_tariff: user ? user.tariff : ''
+                };
+            });
             
         } catch (error) {
             console.error('Ошибка загрузки платежей:', error);
             throw error;
         }
-        
-        console.log('👥 Загрузка данных пользователей...');
-        try {
-            const usersMap = await this.loadUsersDetailsForPayments(token, allPayments);
-            
-            this.reportData = allPayments.map(payment => {
-                const user = usersMap[payment.user_id];
-                
-                return {
-                    id: payment.id || '-',
-                    payment_date: payment.created_at ? 
-                        new Date(payment.created_at).toLocaleString('ru-RU') : '',
-                    user_id: payment.user_id || '-',
-                    user_name: user ? user.name : `Пользователь #${payment.user_id}`,
-                    user_email: user ? user.email : '',
-                    user_phone: user ? user.phone : '',
-                    amount: parseFloat(payment.amount) || 0,
-                    status: this.getStatusText(payment.status),
-                    description: payment.description || ''
-                };
-            });
-            
-            console.log(`📊 Сформировано записей для отчета: ${this.reportData.length}`);
-            
-        } catch (error) {
-            console.error('Ошибка загрузки пользователей:', error);
-            throw error;
-        }
-        
-        return this.reportData;
     }
 
-    async loadUsersDetailsForPayments(token, payments) {
+    async loadUsersForPayments(token, payments) {
         const userIds = [...new Set(payments.map(p => p.user_id).filter(id => id))];
-        console.log(`👥 Загрузка данных для ${userIds.length} пользователей...`);
-        
         const usersMap = {};
-        const totalUsers = userIds.length;
         
-        for (let i = 0; i < userIds.length; i++) {
-            const userId = userIds[i];
-            
+        for (const userId of userIds) {
             try {
                 const userDetails = await this.getUserDetails(userId, token);
                 if (userDetails) {
                     usersMap[userId] = {
-                        name: userDetails.name || `Пользователь #${userId}`,
-                        email: userDetails.email || '',
-                        phone: userDetails.phone || userDetails.phone_number || '',
-                        tariff: userDetails.tariff_name || `Тариф #${userDetails.tariff_id}` || 'Без тарифа'
+                        name: userDetails.name || userDetails.username || '',
+                        tariff: this.getCleanTariffName(userDetails)
                     };
                 }
-                
-                const progress = 50 + Math.round(((i + 1) / totalUsers) * 25);
-                this.showProgress(`Загрузка данных пользователей... (${i + 1}/${totalUsers})`, progress);
-                
             } catch (error) {
-                console.warn(`⚠️ Не удалось загрузить данные пользователя ${userId}:`, error.message);
-                usersMap[userId] = {
-                    name: `Пользователь #${userId}`,
-                    email: '',
-                    phone: '',
-                    tariff: 'Неизвестно'
-                };
+                // Игнорируем ошибки
             }
         }
         
@@ -322,22 +177,16 @@ class ReportGenerator {
         const token = window.authService.token;
         const allUsers = [];
         
-        console.log('👤 Загрузка пользователей для отчета...', config);
-        
         try {
-            // Загружаем ВСЕХ пользователей сначала
             let page = 1;
             const limit = 100;
             let hasMore = true;
-            let allRawUsers = [];
             
             while (hasMore) {
                 const params = new URLSearchParams({
                     page: page,
                     limit: limit
                 });
-                
-                console.log(`📄 Загрузка страницы ${page} всех пользователей...`);
                 
                 const response = await fetch(`${this.baseUrl}/users?${params.toString()}`, {
                     method: 'GET',
@@ -357,162 +206,74 @@ class ReportGenerator {
                 if (users.length === 0) {
                     hasMore = false;
                 } else {
-                    allRawUsers.push(...users);
-                    console.log(`✅ Загружено пользователей: ${allRawUsers.length}`);
-                    
-                    const progress = Math.min(50, Math.round((page * 100) / 50));
-                    this.showProgress(`Загрузка всех пользователей... (${allRawUsers.length})`, progress);
-                    
+                    allUsers.push(...users);
                     page++;
                 }
             }
             
-            console.log(`👥 Всего загружено пользователей: ${allRawUsers.length}`);
-            
-            // Фильтрация по дате регистрации
-            let filteredUsers = allRawUsers;
-            
+            // Фильтрация по дате
+            let filteredUsers = allUsers;
             if (config.dateStart && config.dateEnd) {
                 const startDate = new Date(config.dateStart);
                 const endDate = new Date(config.dateEnd);
                 endDate.setHours(23, 59, 59, 999);
                 
-                console.log(`📅 Фильтрация пользователей по дате: ${config.dateStart} - ${config.dateEnd}`);
-                
-                filteredUsers = allRawUsers.filter(user => {
+                filteredUsers = allUsers.filter(user => {
                     if (!user.created_at) return false;
-                    
                     try {
                         const regDate = new Date(user.created_at);
                         return regDate >= startDate && regDate <= endDate;
                     } catch (error) {
-                        console.error('Ошибка парсинга даты регистрации:', user.created_at);
                         return false;
                     }
                 });
-                
-                console.log(`✅ После фильтра по дате: ${filteredUsers.length} пользователей`);
-            }
-            
-            // Ограничение по количеству
-            if (config.chunkSize !== 'all') {
-                const limit = parseInt(config.chunkSize);
-                if (filteredUsers.length > limit) {
-                    filteredUsers = filteredUsers.slice(0, limit);
-                    console.log(`✂️ Ограничение до ${limit} записей: ${filteredUsers.length}`);
-                }
             }
             
             // Загружаем детальные данные
-            console.log('🔍 Загрузка детальных данных пользователей...');
-            this.showProgress('Загрузка данных тарифов...', 75);
-            
             const usersWithDetails = [];
-            const totalUsers = filteredUsers.length;
-            
-            for (let i = 0; i < filteredUsers.length; i++) {
-                const user = filteredUsers[i];
-                
-                // ЗДЕСЬ ИСПРАВЛЕНИЕ: используем правильный URL
-                const userDetails = await this.getUserDetails(user.id, token);
-                
-                if (userDetails) {
-                    const combinedUser = {
-                        ...user,
-                        ...userDetails,
-                        name: userDetails.name || user.name || user.username,
-                        email: userDetails.email || user.email,
-                        phone: userDetails.phone || user.phone,
-                        balance: userDetails.balance || user.balance
-                    };
-                    
-                    usersWithDetails.push(combinedUser);
-                } else {
-                    usersWithDetails.push(user);
-                }
-                
-                const progress = 75 + Math.round(((i + 1) / totalUsers) * 25);
-                this.showProgress(`Загрузка данных пользователей... (${i + 1}/${totalUsers})`, progress);
-            }
-            
-            console.log(`✅ Загружено детальных данных: ${usersWithDetails.length} пользователей`);
-            
-            // Фильтрация по тарифу
-            let finalUsers = usersWithDetails;
-            
-            if (config.tariffFilter && config.tariffFilter !== 'all') {
-                console.log('🔍 Применяем фильтр по тарифу:', config.tariffFilter);
-                
-                if (config.tariffFilter === 'with_tariff') {
-                    finalUsers = usersWithDetails.filter(user => 
-                        user.tariff_id || user.tariff_name
-                    );
-                    console.log(`✅ Пользователей с тарифом: ${finalUsers.length}`);
-                } else if (config.tariffFilter === 'without_tariff') {
-                    finalUsers = usersWithDetails.filter(user => 
-                        !user.tariff_id && !user.tariff_name
-                    );
-                    console.log(`✅ Пользователей без тарифа: ${finalUsers.length}`);
+            for (const user of filteredUsers) {
+                try {
+                    const userDetails = await this.getUserDetails(user.id, token);
+                    if (userDetails) {
+                        usersWithDetails.push({
+                            id: user.id,
+                            name: userDetails.name || userDetails.username || user.name || user.username || '',
+                            email: userDetails.email || user.email || '',
+                            phone: userDetails.phone || user.phone || user.phone_number || '',
+                            balance: parseFloat(userDetails.balance || user.balance || 0),
+                            tariff: this.getCleanTariffName(userDetails),
+                            status: userDetails.is_active === false ? 'Неактивен' : 'Активен',
+                            reg_date: user.created_at ? 
+                                new Date(user.created_at).toLocaleDateString('ru-RU') : ''
+                        });
+                    }
+                } catch (error) {
+                    // Используем базовые данные если не удалось загрузить детальные
+                    usersWithDetails.push({
+                        id: user.id,
+                        name: user.name || user.username || '',
+                        email: user.email || '',
+                        phone: user.phone || user.phone_number || '',
+                        balance: parseFloat(user.balance || 0),
+                        tariff: this.getCleanTariffName(user),
+                        status: user.is_active === false ? 'Неактивен' : 'Активен',
+                        reg_date: user.created_at ? 
+                            new Date(user.created_at).toLocaleDateString('ru-RU') : ''
+                    });
                 }
             }
             
-            allUsers.push(...finalUsers);
+            return usersWithDetails;
             
         } catch (error) {
             console.error('Ошибка загрузки пользователей:', error);
             throw error;
         }
-        
-        // Формируем финальные данные
-        this.reportData = allUsers.map(user => {
-            const tariffInfo = this.getUserTariffInfo(user);
-            
-            return {
-                id: user.id || '-',
-                name: user.name || user.username || `Пользователь #${user.id}`,
-                email: user.email || '',
-                phone: user.phone || user.phone_number || '',
-                balance: parseFloat(user.balance) || 0,
-                tariff: tariffInfo.tariffName,
-                tariff_status: tariffInfo.tariffStatus,
-                registration_date: user.created_at ? 
-                    new Date(user.created_at).toLocaleDateString('ru-RU') : ''
-            };
-        });
-        
-        console.log(`👥 Сформировано записей пользователей для отчета: ${this.reportData.length}`);
-        
-        return this.reportData;
     }
 
     async getUserDetails(userId, token) {
         try {
-            // ИСПРАВЛЕНИЕ: используем правильный URL без /admin
             const response = await fetch(`http://localhost:8080/api/v1/auth/${userId}`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                console.warn(`⚠️ Не удалось загрузить данные пользователя ${userId}: ${response.status}`);
-                return null;
-            }
-            
-            const data = await response.json();
-            return data.user || data;
-            
-        } catch (error) {
-            console.warn(`⚠️ Ошибка загрузки пользователя ${userId}:`, error.message);
-            return null;
-        }
-    }
-
-    async loadTariffsMap(token) {
-        try {
-            const response = await fetch(`${this.baseUrl}/tariffs?limit=100`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -522,408 +283,296 @@ class ReportGenerator {
             
             if (response.ok) {
                 const data = await response.json();
-                const tariffs = data.tariffs || data.data || [];
-                
-                const tariffMap = {};
-                tariffs.forEach(tariff => {
-                    if (tariff.id && tariff.name) {
-                        tariffMap[tariff.id] = tariff.name;
-                    }
-                });
-                
-                console.log('✅ Загружен словарь тарифов:', tariffMap);
-                return tariffMap;
+                return data.user || data;
             }
         } catch (error) {
-            console.warn('⚠️ Не удалось загрузить тарифы:', error.message);
+            // Игнорируем ошибки
         }
-        
         return null;
     }
 
-    getTariffNameById(tariffId) {
-        if (this.tariffMap && this.tariffMap[tariffId]) {
-            return this.tariffMap[tariffId];
+    getCleanTariffName(user) {
+        if (!user) return 'Без тарифа';
+        
+        // Если есть название тарифа
+        if (user.tariff_name && user.tariff_name.trim()) {
+            return user.tariff_name;
         }
         
-        const defaultTariffMap = {
-            1: 'Базовый',
-            2: 'Стандартный', 
-            3: 'Премиум',
-            4: 'Бизнес',
-            5: 'Безлимитный',
-            6: 'Эконом',
-            7: 'Оптимальный',
-            8: 'Максимальный'
-        };
-        
-        return defaultTariffMap[tariffId] || `Тариф #${tariffId}`;
-    }
-
-    // ВАЖНО: этот метод должен быть внутри класса
-    getUserTariffInfo(user) {
-        let tariffName = 'Без тарифа';
-        let tariffStatus = 'Неактивен';
-        
-        if (!user) {
-            return { tariffName, tariffStatus };
-        }
-        
-        // Проверяем наличие tariff_id
+        // Если есть ID тарифа, но нет названия
         if (user.tariff_id) {
-            tariffStatus = 'Активен';
-            
-            if (user.tariff_name) {
-                tariffName = user.tariff_name;
-            } else {
-                tariffName = this.getTariffNameById(user.tariff_id);
-            }
-            
-            if (user.accountn && user.balance > 0) {
-                tariffStatus = 'Активен';
-            }
-        }
-        else if (user.tariff_name) {
-            tariffName = user.tariff_name;
-            tariffStatus = 'Активен';
-        }
-        else if (user.accountn && user.balance > 100) {
-            tariffName = 'Тариф (не указан)';
-            tariffStatus = 'Активен';
+            const tariffNames = {
+                1: 'Базовый',
+                2: 'Стандартный', 
+                3: 'Премиум',
+                4: 'Бизнес',
+                5: 'Безлимитный'
+            };
+            return tariffNames[user.tariff_id] || 'Без тарифа';
         }
         
-        console.log(`✅ Пользователь ${user.id}: Тариф "${tariffName}", Статус: "${tariffStatus}"`);
+        // Если баланс высокий, считаем что есть тариф
+        if (user.balance && parseFloat(user.balance) > 100) {
+            return 'Премиум (по балансу)';
+        }
         
-        return { tariffName, tariffStatus };
+        return 'Без тарифа';
     }
 
-    async createPaymentsExcelFile(data, chunkNumber) {
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('Платежи');
-        
-        worksheet.columns = [
-            { header: 'ID платежа', key: 'id', width: 15 },
-            { header: 'Дата и время', key: 'payment_date', width: 20 },
-            { header: 'ID пользователя', key: 'user_id', width: 15 },
-            { header: 'Имя пользователя', key: 'user_name', width: 25 },
-            { header: 'Email', key: 'user_email', width: 25 },
-            { header: 'Телефон', key: 'user_phone', width: 20 },
-            { header: 'Сумма (₽)', key: 'amount', width: 15 },
-            { header: 'Статус', key: 'status', width: 15 },
-            { header: 'Описание', key: 'description', width: 30 }
-        ];
-        
-        const headerRow = worksheet.getRow(1);
-        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
-        headerRow.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FF4F81BD' }
-        };
-        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-        
-        data.forEach(item => {
-            worksheet.addRow(item);
-        });
-        
-        worksheet.getColumn('amount').numFmt = '#,##0.00 ₽';
-        worksheet.getColumn('amount').alignment = { horizontal: 'right' };
-        
-        if (data.length > 0) {
-            const totalRow = worksheet.addRow({});
-            totalRow.getCell('user_name').value = 'ИТОГО:';
-            totalRow.getCell('user_name').font = { bold: true };
-            
-            const totalAmount = data.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-            totalRow.getCell('amount').value = totalAmount;
-            totalRow.getCell('amount').numFmt = '#,##0.00 ₽';
-            totalRow.getCell('amount').font = { bold: true };
-        }
-        
-        worksheet.addRow({});
-        const titleRow = worksheet.addRow({});
-        titleRow.getCell('user_name').value = 'ОТЧЕТ ПО ПЛАТЕЖАМ';
-        titleRow.getCell('user_name').font = { bold: true, size: 14 };
-        titleRow.getCell('status').value = new Date().toLocaleDateString('ru-RU');
-        
-        worksheet.addRow({});
-        const infoRow = worksheet.addRow({});
-        infoRow.getCell('user_name').value = 'Сформировано:';
-        infoRow.getCell('status').value = new Date().toLocaleString('ru-RU');
-        
-        if (this.reportConfig.dateStart && this.reportConfig.dateEnd) {
-            worksheet.addRow({});
-            const periodRow = worksheet.addRow({});
-            periodRow.getCell('user_name').value = 'Период отчета:';
-            periodRow.getCell('status').value = 
-                `${this.reportConfig.dateStart} — ${this.reportConfig.dateEnd}`;
-            
-            worksheet.addRow({});
-            const daysRow = worksheet.addRow({});
-            const startDate = new Date(this.reportConfig.dateStart);
-            const endDate = new Date(this.reportConfig.dateEnd);
-            const diffTime = Math.abs(endDate - startDate);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-            daysRow.getCell('user_name').value = 'Дней в периоде:';
-            daysRow.getCell('status').value = diffDays;
-        }
-        
-        if (this.reportConfig.status && this.reportConfig.status !== 'all') {
-            worksheet.addRow({});
-            const statusRow = worksheet.addRow({});
-            statusRow.getCell('user_name').value = 'Фильтр по статусу:';
-            statusRow.getCell('status').value = this.getStatusText(this.reportConfig.status);
-        }
-        
-        await this.saveWorkbook(workbook, 'payments', chunkNumber);
-    }
-
-    async createUsersExcelFile(data, chunkNumber) {
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('Пользователи');
-        
-        worksheet.columns = [
-            { header: 'ID', key: 'id', width: 10 },
-            { header: 'Имя', key: 'name', width: 25 },
-            { header: 'Email', key: 'email', width: 30 },
-            { header: 'Телефон', key: 'phone', width: 20 },
-            { header: 'Баланс (₽)', key: 'balance', width: 15 },
-            { header: 'Тариф', key: 'tariff', width: 20 },
-            { header: 'Статус тарифа', key: 'tariff_status', width: 15 },
-            { header: 'Дата регистрации', key: 'registration_date', width: 15 }
-        ];
-        
-        const headerRow = worksheet.getRow(1);
-        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
-        headerRow.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FF2196F3' }
-        };
-        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-        
-        data.forEach(user => {
-            console.log(`📝 Запись в отчет: Пользователь ${user.id} - Тариф: "${user.tariff}", Статус: "${user.tariff_status}"`);
-            worksheet.addRow({
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                phone: user.phone,
-                balance: user.balance,
-                tariff: user.tariff,
-                tariff_status: user.tariff_status,
-                registration_date: user.registration_date
-            });
-        });
-        
-        worksheet.getColumn('balance').numFmt = '#,##0.00 ₽';
-        worksheet.getColumn('balance').alignment = { horizontal: 'right' };
-        
-        const totalUsers = data.length;
-        const totalBalance = data.reduce((sum, user) => sum + (parseFloat(user.balance) || 0), 0);
-        const activeTariffs = data.filter(user => user.tariff_status === 'Активен').length;
-        const inactiveTariffs = data.filter(user => user.tariff_status === 'Неактивен').length;
-        
-        console.log(`📊 Статистика отчета: Всего: ${totalUsers}, Активных: ${activeTariffs}, Неактивных: ${inactiveTariffs}`);
-        
-        worksheet.addRow({});
-        const titleRow = worksheet.addRow({});
-        titleRow.getCell('name').value = 'ОТЧЕТ ПО ПОЛЬЗОВАТЕЛЯМ';
-        titleRow.getCell('name').font = { bold: true, size: 14 };
-        titleRow.getCell('registration_date').value = new Date().toLocaleDateString('ru-RU');
-        
-        worksheet.addRow({});
-        const infoRow = worksheet.addRow({});
-        infoRow.getCell('name').value = 'Сформировано:';
-        infoRow.getCell('registration_date').value = new Date().toLocaleString('ru-RU');
-        
-        if (this.reportConfig.dateStart && this.reportConfig.dateEnd) {
-            worksheet.addRow({});
-            const periodRow = worksheet.addRow({});
-            periodRow.getCell('name').value = 'Период регистрации:';
-            periodRow.getCell('registration_date').value = 
-                `${this.reportConfig.dateStart} — ${this.reportConfig.dateEnd}`;
-        }
-        
-        if (this.reportConfig.tariffFilter && this.reportConfig.tariffFilter !== 'all') {
-            worksheet.addRow({});
-            const filterRow = worksheet.addRow({});
-            filterRow.getCell('name').value = 'Фильтр по тарифу:';
-            filterRow.getCell('registration_date').value = 
-                this.reportConfig.tariffFilter === 'with_tariff' ? 'С тарифом' : 'Без тарифа';
-        }
-        
-        worksheet.addRow({});
-        const statsTitleRow = worksheet.addRow({});
-        statsTitleRow.getCell('name').value = 'ДЕТАЛЬНАЯ СТАТИСТИКА:';
-        statsTitleRow.getCell('name').font = { bold: true, size: 12 };
-        
-        worksheet.addRow({});
-        const totalUsersRow = worksheet.addRow({});
-        totalUsersRow.getCell('name').value = 'Всего пользователей:';
-        totalUsersRow.getCell('balance').value = totalUsers;
-        totalUsersRow.getCell('balance').font = { bold: true };
-        
-        const totalBalanceRow = worksheet.addRow({});
-        totalBalanceRow.getCell('name').value = 'Общий баланс:';
-        totalBalanceRow.getCell('balance').value = totalBalance;
-        totalBalanceRow.getCell('balance').numFmt = '#,##0.00 ₽';
-        totalBalanceRow.getCell('balance').font = { bold: true };
-        
-        const avgBalanceRow = worksheet.addRow({});
-        avgBalanceRow.getCell('name').value = 'Средний баланс:';
-        avgBalanceRow.getCell('balance').value = totalUsers > 0 ? (totalBalance / totalUsers).toFixed(2) : 0;
-        avgBalanceRow.getCell('balance').numFmt = '#,##0.00 ₽';
-        avgBalanceRow.getCell('balance').font = { bold: true };
-        
-        await this.saveWorkbook(workbook, 'users', chunkNumber);
-    }
-
-    async createCombinedExcelFile(paymentsData, usersData, config) {
-        const workbook = new ExcelJS.Workbook();
-        
-        if (config.includePayments && paymentsData.length > 0) {
-            const paymentsSheet = workbook.addWorksheet('Платежи');
-            paymentsSheet.columns = [
-                { header: 'ID платежа', key: 'id', width: 15 },
-                { header: 'Дата', key: 'payment_date', width: 20 },
-                { header: 'Пользователь', key: 'user_name', width: 25 },
-                { header: 'Сумма (₽)', key: 'amount', width: 15 },
-                { header: 'Статус', key: 'status', width: 15 }
-            ];
-            
-            const paymentsHeader = paymentsSheet.getRow(1);
-            paymentsHeader.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-            paymentsHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4CAF50' } };
-            paymentsHeader.alignment = { vertical: 'middle', horizontal: 'center' };
-            
-            paymentsData.forEach(item => {
-                paymentsSheet.addRow({
-                    id: item.id,
-                    payment_date: item.payment_date,
-                    user_name: item.user_name,
-                    amount: item.amount,
-                    status: item.status
-                });
-            });
-            
-            paymentsSheet.getColumn('amount').numFmt = '#,##0.00 ₽';
-            
-            if (paymentsData.length > 0) {
-                const totalAmount = paymentsData.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
-                paymentsSheet.addRow({});
-                const totalRow = paymentsSheet.addRow({});
-                totalRow.getCell('user_name').value = 'ИТОГО:';
-                totalRow.getCell('user_name').font = { bold: true };
-                totalRow.getCell('amount').value = totalAmount;
-                totalRow.getCell('amount').numFmt = '#,##0.00 ₽';
-                totalRow.getCell('amount').font = { bold: true };
-            }
-        }
-        
-        if (config.includeUsers && usersData.length > 0) {
-            const usersSheet = workbook.addWorksheet('Пользователи');
-            usersSheet.columns = [
-                { header: 'ID', key: 'id', width: 10 },
-                { header: 'Имя', key: 'name', width: 25 },
-                { header: 'Email', key: 'email', width: 30 },
-                { header: 'Телефон', key: 'phone', width: 20 },
-                { header: 'Баланс (₽)', key: 'balance', width: 15 },
-                { header: 'Тариф', key: 'tariff', width: 20 },
-                { header: 'Статус', key: 'tariff_status', width: 15 }
-            ];
-            
-            const usersHeader = usersSheet.getRow(1);
-            usersHeader.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-            usersHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2196F3' } };
-            usersHeader.alignment = { vertical: 'middle', horizontal: 'center' };
-            
-            usersData.forEach(user => {
-                usersSheet.addRow({
-                    id: user.id,
-                    name: user.name,
-                    email: user.email,
-                    phone: user.phone,
-                    balance: user.balance,
-                    tariff: user.tariff,
-                    tariff_status: user.tariff_status
-                });
-            });
-            
-            usersSheet.getColumn('balance').numFmt = '#,##0.00 ₽';
-        }
-        
-        const dateStr = new Date().toISOString().split('T')[0];
-        const filename = `combined_report_${dateStr}.xlsx`;
-        
-        const buffer = await workbook.xlsx.writeBuffer();
-        const blob = new Blob([buffer], { 
-            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-        });
-        
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-    }
-
-    async saveWorkbook(workbook, type, chunkNumber) {
-        const dateStr = new Date().toISOString().split('T')[0];
-        const chunkSuffix = this.totalChunks > 1 ? `_часть${chunkNumber}` : '';
-        const filename = `${type}_report_${dateStr}${chunkSuffix}.xlsx`;
-        
-        const buffer = await workbook.xlsx.writeBuffer();
-        const blob = new Blob([buffer], { 
-            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-        });
-        
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-    }
-
-    // Этот метод тоже должен быть внутри класса
-    getStatusText(status) {
+    getSimpleStatus(status) {
         const statusMap = {
             'completed': 'Успешно',
             'pending': 'В обработке',
             'failed': 'Ошибка',
-            'cancelled': 'Отменен'
+            'cancelled': 'Отменен',
+            'refunded': 'Возврат',
+            'created': 'Создан'
         };
         return statusMap[status] || status || 'Неизвестно';
+    }
+
+    async createSimpleCombinedExcel(paymentsData, usersData, config) {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Сводный отчет');
+        
+        let row = 1;
+        
+        // 1. ЗАГОЛОВОК
+        sheet.mergeCells(`A${row}:F${row}`);
+        const titleCell = sheet.getCell(`A${row}`);
+        titleCell.value = '📊 СВОДНЫЙ ОТЧЕТ';
+        titleCell.font = { bold: true, size: 16, color: { argb: 'FF2E5AA7' } };
+        titleCell.alignment = { horizontal: 'center' };
+        row += 2;
+        
+        // 2. ПЕРИОД
+        sheet.getCell(`A${row}`).value = 'Период:';
+        sheet.getCell(`A${row}`).font = { bold: true };
+        sheet.getCell(`B${row}`).value = `${config.dateStart || 'Все время'} - ${config.dateEnd || 'Все время'}`;
+        row++;
+        
+        sheet.getCell(`A${row}`).value = 'Дата формирования:';
+        sheet.getCell(`B${row}`).value = new Date().toLocaleString('ru-RU');
+        row += 2;
+        
+        // 3. ОСНОВНЫЕ ПОКАЗАТЕЛИ (упрощенные)
+        if (paymentsData.length > 0 || usersData.length > 0) {
+            sheet.mergeCells(`A${row}:F${row}`);
+            sheet.getCell(`A${row}`).value = '📈 ОСНОВНЫЕ ПОКАЗАТЕЛИ';
+            sheet.getCell(`A${row}`).font = { bold: true, size: 12, color: { argb: 'FF27AE60' } };
+            row++;
+            
+            const totalUsers = usersData.length;
+            const totalBalance = usersData.reduce((sum, u) => sum + u.balance, 0);
+            const totalPayments = paymentsData.length;
+            const totalAmount = paymentsData.reduce((sum, p) => sum + p.amount, 0);
+            
+            // ТОЛЬКО 4 основных показателя в 2 колонки
+            const stats = [
+                ['Всего пользователей:', totalUsers],
+                ['Общий баланс:', totalBalance],
+                ['Всего транзакций:', totalPayments],
+                ['Общая сумма:', totalAmount]
+            ];
+            
+            for (let i = 0; i < stats.length; i += 2) {
+                const stat1 = stats[i];
+                const stat2 = stats[i + 1];
+                
+                sheet.getCell(`A${row}`).value = stat1[0];
+                sheet.getCell(`B${row}`).value = stat1[1];
+                sheet.getCell(`B${row}`).font = { bold: true };
+                
+                if (stat2) {
+                    sheet.getCell(`D${row}`).value = stat2[0];
+                    sheet.getCell(`E${row}`).value = stat2[1];
+                    sheet.getCell(`E${row}`).font = { bold: true };
+                }
+                
+                // Форматируем денежные значения
+                if (stat1[0].includes('баланс') || stat1[0].includes('сумм')) {
+                    sheet.getCell(`B${row}`).numFmt = '#,##0.00 ₽';
+                }
+                if (stat2 && (stat2[0].includes('баланс') || stat2[0].includes('сумм'))) {
+                    sheet.getCell(`E${row}`).numFmt = '#,##0.00 ₽';
+                }
+                
+                row++;
+            }
+            row += 2;
+        }
+        
+        // 4. ПЛАТЕЖИ (если есть)
+        if (paymentsData.length > 0) {
+            sheet.mergeCells(`A${row}:F${row}`);
+            sheet.getCell(`A${row}`).value = '💳 ПЛАТЕЖИ';
+            sheet.getCell(`A${row}`).font = { bold: true, size: 12, color: { argb: 'FF9B59B6' } };
+            row++;
+            
+            // Заголовки
+            const paymentHeaders = ['Дата', 'Время', 'Пользователь', 'Сумма', 'Статус'];
+            paymentHeaders.forEach((header, idx) => {
+                sheet.getCell(`${String.fromCharCode(65 + idx)}${row}`).value = header;
+                sheet.getCell(`${String.fromCharCode(65 + idx)}${row}`).font = { bold: true };
+                sheet.getCell(`${String.fromCharCode(65 + idx)}${row}`).fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFE8DAEF' }
+                };
+            });
+            row++;
+            
+            // Данные
+            paymentsData
+                .filter(p => p.amount > 0) // фильтруем нулевые суммы
+                .forEach(payment => {
+                    sheet.getCell(`A${row}`).value = payment.date;
+                    sheet.getCell(`B${row}`).value = payment.time;
+                    sheet.getCell(`C${row}`).value = payment.user_name || `ID: ${payment.user_id}`;
+                    sheet.getCell(`D${row}`).value = payment.amount;
+                    sheet.getCell(`D${row}`).numFmt = '#,##0.00 ₽';
+                    sheet.getCell(`E${row}`).value = payment.status;
+                    sheet.getCell(`F${row}`).value = payment.description || '';
+                    
+                    // Цвет строки в зависимости от статуса
+                    if (payment.status === 'Успешно') {
+                        sheet.getRow(row).fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'FFE8F5E8' }
+                        };
+                    } else if (payment.status === 'Ошибка' || payment.status === 'Отменен') {
+                        sheet.getRow(row).fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'FFFDE8E8' }
+                        };
+                    } else if (payment.status === 'В обработке') {
+                        sheet.getRow(row).fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'FFFEF8E8' }
+                        };
+                    }
+                    
+                    row++;
+                });
+                
+            // Итоговая сумма
+            const totalAmount = paymentsData.reduce((sum, p) => sum + p.amount, 0);
+            sheet.getCell(`C${row}`).value = 'ИТОГО:';
+            sheet.getCell(`C${row}`).font = { bold: true };
+            sheet.getCell(`D${row}`).value = totalAmount;
+            sheet.getCell(`D${row}`).numFmt = '#,##0.00 ₽';
+            sheet.getCell(`D${row}`).font = { bold: true };
+            row += 2;
+        }
+        
+        // 5. ПОЛЬЗОВАТЕЛИ (если есть)
+        if (usersData.length > 0) {
+            sheet.mergeCells(`A${row}:F${row}`);
+            sheet.getCell(`A${row}`).value = '👥 ПОЛЬЗОВАТЕЛИ';
+            sheet.getCell(`A${row}`).font = { bold: true, size: 12, color: { argb: 'FF3498DB' } };
+            row++;
+            
+            // Заголовки (только имя, телефон и баланс)
+            const userHeaders = ['Имя', 'Телефон', 'Баланс', 'Тариф', 'Статус'];
+            userHeaders.forEach((header, idx) => {
+                sheet.getCell(`${String.fromCharCode(65 + idx)}${row}`).value = header;
+                sheet.getCell(`${String.fromCharCode(65 + idx)}${row}`).font = { bold: true };
+                sheet.getCell(`${String.fromCharCode(65 + idx)}${row}`).fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFD6EAF8' }
+                };
+            });
+            row++;
+            
+            // Данные
+            usersData.forEach(user => {
+                sheet.getCell(`A${row}`).value = user.name;
+                sheet.getCell(`B${row}`).value = user.phone || '';
+                sheet.getCell(`C${row}`).value = user.balance;
+                sheet.getCell(`C${row}`).numFmt = '#,##0.00 ₽';
+                sheet.getCell(`D${row}`).value = user.tariff;
+                sheet.getCell(`E${row}`).value = user.status;
+                
+                // Цвет строки в зависимости от статуса
+                if (user.status === 'Активен') {
+                    sheet.getRow(row).fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'FFE8F5E8' }
+                    };
+                } else {
+                    sheet.getRow(row).fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'FFF0F0F0' }
+                    };
+                }
+                
+                row++;
+            });
+            
+            // Итоговый баланс
+            const totalBalance = usersData.reduce((sum, u) => sum + u.balance, 0);
+            sheet.getCell(`B${row}`).value = 'ИТОГО:';
+            sheet.getCell(`B${row}`).font = { bold: true };
+            sheet.getCell(`C${row}`).value = totalBalance;
+            sheet.getCell(`C${row}`).numFmt = '#,##0.00 ₽';
+            sheet.getCell(`C${row}`).font = { bold: true };
+        }
+        
+        // Настройка ширины колонок
+        sheet.columns = [
+            { width: 12 }, // A - Дата/Имя
+            { width: 10 }, // B - Время/Телефон
+            { width: 25 }, // C - Пользователь/Баланс
+            { width: 15 }, // D - Сумма/Тариф
+            { width: 15 }, // E - Статус/Статус
+            { width: 30 }  // F - Описание
+        ];
+        
+        // Автофильтр
+        if (paymentsData.length > 0 || usersData.length > 0) {
+            sheet.autoFilter = {
+                from: { row: 1, column: 1 },
+                to: { row: row, column: 6 }
+            };
+        }
+        
+        // Сохранение файла
+        const dateStr = new Date().toISOString().split('T')[0];
+        const filename = `сводный_отчет_${dateStr}.xlsx`;
+        
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { 
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+        });
+        
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
     }
 
     showProgress(message, percent) {
         const progressModal = document.getElementById('reportProgressModal');
         const progressMessage = document.getElementById('progressMessage');
         const progressFill = document.getElementById('progressFill');
-        const progressDetails = document.getElementById('progressDetails');
         
         if (progressModal) {
             progressModal.style.display = 'flex';
-            
-            if (progressMessage) {
-                progressMessage.textContent = message;
-            }
-            
+            if (progressMessage) progressMessage.textContent = message;
             if (progressFill) {
                 progressFill.style.width = `${percent}%`;
                 progressFill.textContent = `${percent}%`;
-            }
-            
-            if (progressDetails) {
-                progressDetails.textContent = `Часть ${this.currentChunk} из ${this.totalChunks}`;
             }
         }
     }
@@ -936,7 +585,7 @@ class ReportGenerator {
     }
 }
 
-// Глобальные функции для работы с отчетами (вне класса)
+// Глобальные функции
 window.reportGenerator = new ReportGenerator();
 
 function showReportModal(type = 'payments') {
@@ -948,7 +597,6 @@ function showReportModal(type = 'payments') {
     startDate.setDate(startDate.getDate() - 30);
     
     document.getElementById('reportType').value = type;
-    document.getElementById('reportChunkSize').value = 'all';
     
     if (type === 'payments') {
         document.getElementById('reportDateStart').value = startDate.toISOString().split('T')[0];
@@ -961,9 +609,6 @@ function showReportModal(type = 'payments') {
     } else if (type === 'combined') {
         document.getElementById('combinedDateStart').value = startDate.toISOString().split('T')[0];
         document.getElementById('combinedDateEnd').value = endDate.toISOString().split('T')[0];
-        document.getElementById('includePayments').checked = true;
-        document.getElementById('includeUsers').checked = true;
-        document.getElementById('includeStats').checked = true;
     }
     
     onReportTypeChange();
@@ -984,20 +629,14 @@ function closeReportModal() {
 function onReportTypeChange() {
     const type = document.getElementById('reportType').value;
     
-    document.getElementById('paymentsOptions').style.display = 
-        type === 'payments' ? 'block' : 'none';
-    document.getElementById('usersOptions').style.display = 
-        type === 'users' ? 'block' : 'none';
-    document.getElementById('combinedOptions').style.display = 
-        type === 'combined' ? 'block' : 'none';
-}
-
-function cancelReport() {
-    const progressModal = document.getElementById('reportProgressModal');
-    if (progressModal) {
-        progressModal.style.display = 'none';
-        reportGenerator.isGenerating = false;
-    }
+    // Просто показываем/скрываем блоки
+    const paymentsOptions = document.getElementById('paymentsOptions');
+    const usersOptions = document.getElementById('usersOptions');
+    const combinedOptions = document.getElementById('combinedOptions');
+    
+    if (paymentsOptions) paymentsOptions.style.display = type === 'payments' ? 'block' : 'none';
+    if (usersOptions) usersOptions.style.display = type === 'users' ? 'block' : 'none';
+    if (combinedOptions) combinedOptions.style.display = type === 'combined' ? 'block' : 'none';
 }
 
 async function generateReport() {
@@ -1005,7 +644,7 @@ async function generateReport() {
     
     let config = {
         type: type,
-        chunkSize: document.getElementById('reportChunkSize').value
+        chunkSize: 'all' // всегда все данные
     };
     
     switch(type) {
@@ -1058,9 +697,6 @@ async function generateReport() {
             
             config.dateStart = combinedDateStart;
             config.dateEnd = combinedDateEnd;
-            config.includePayments = document.getElementById('includePayments').checked;
-            config.includeUsers = document.getElementById('includeUsers').checked;
-            config.includeStats = document.getElementById('includeStats').checked;
             break;
     }
     
@@ -1075,32 +711,8 @@ async function generateReport() {
 }
 
 window.addEventListener('click', function(event) {
-    const reportModal = document.getElementById('reportModal');
-    const progressModal = document.getElementById('reportProgressModal');
-    
-    if (reportModal && event.target === reportModal) {
+    const modal = document.getElementById('reportModal');
+    if (modal && event.target === modal) {
         closeReportModal();
     }
-    
-    if (progressModal && event.target === progressModal) {
-        // Не закрываем окно прогресса по клику вне его
-    }
 });
-
-// Тестовая функция для проверки тарифов
-window.testTariffCheck = async function(userId) {
-    const token = window.authService.token;
-    const response = await fetch(`http://localhost:8080/api/v1/auth/${userId}`, {
-        method: 'GET',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        }
-    });
-    
-    if (response.ok) {
-        const user = await response.json();
-        console.log('Данные пользователя:', user);
-        console.log('Есть ли тариф?', window.reportGenerator.getUserTariffInfo(user));
-    }
-};
