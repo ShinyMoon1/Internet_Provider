@@ -40,6 +40,315 @@ class ReportGenerator {
         }
     }
 
+    // НОВЫЙ МЕТОД: Отчет по платежам
+    async generatePaymentsReport(config) {
+        this.showProgress('Загрузка платежей...', 30);
+        const paymentsData = await this.loadPaymentsData(config);
+        
+        if (paymentsData.length === 0) {
+            this.hideProgress();
+            alert('Нет данных для формирования отчета по платежам');
+            return;
+        }
+        
+        this.showProgress('Формирование отчета по платежам...', 70);
+        await this.createSimplePaymentsExcel(paymentsData, config);
+        
+        this.hideProgress();
+        alert('Отчет по платежам успешно сформирован!');
+    }
+
+    // НОВЫЙ МЕТОД: Отчет по пользователям
+    async generateUsersReport(config) {
+        this.showProgress('Загрузка пользователей...', 30);
+        const usersData = await this.loadUsersData(config);
+        
+        if (usersData.length === 0) {
+            this.hideProgress();
+            alert('Нет данных для формирования отчета по пользователям');
+            return;
+        }
+        
+        this.showProgress('Формирование отчета по пользователям...', 70);
+        await this.createSimpleUsersExcel(usersData, config);
+        
+        this.hideProgress();
+        alert('Отчет по пользователям успешно сформирован!');
+    }
+
+    // НОВЫЙ МЕТОД: Создание Excel для платежей
+    async createSimplePaymentsExcel(paymentsData, config) {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Платежи');
+        
+        let row = 1;
+        
+        // ЗАГОЛОВОК
+        sheet.mergeCells(`A${row}:F${row}`);
+        const titleCell = sheet.getCell(`A${row}`);
+        titleCell.value = '💳 ОТЧЕТ ПО ПЛАТЕЖАМ';
+        titleCell.font = { bold: true, size: 16, color: { argb: 'FF9B59B6' } };
+        titleCell.alignment = { horizontal: 'center' };
+        row += 2;
+        
+        // ПЕРИОД
+        sheet.getCell(`A${row}`).value = 'Период:';
+        sheet.getCell(`A${row}`).font = { bold: true };
+        sheet.getCell(`B${row}`).value = `${config.dateStart || 'Все время'} - ${config.dateEnd || 'Все время'}`;
+        row++;
+        
+        sheet.getCell(`A${row}`).value = 'Дата формирования:';
+        sheet.getCell(`B${row}`).value = new Date().toLocaleString('ru-RU');
+        row += 2;
+        
+        // СТАТИСТИКА
+        const totalAmount = paymentsData.reduce((sum, p) => sum + p.amount, 0);
+        const completedCount = paymentsData.filter(p => p.status === 'Успешно').length;
+        const pendingCount = paymentsData.filter(p => p.status === 'В обработке').length;
+        const failedCount = paymentsData.filter(p => p.status === 'Ошибка' || p.status === 'Отменен').length;
+        
+        sheet.getCell(`A${row}`).value = 'Всего транзакций:';
+        sheet.getCell(`B${row}`).value = paymentsData.length;
+        sheet.getCell(`B${row}`).font = { bold: true };
+        row++;
+        
+        sheet.getCell(`A${row}`).value = 'Общая сумма:';
+        sheet.getCell(`B${row}`).value = totalAmount;
+        sheet.getCell(`B${row}`).numFmt = '#,##0.00 ₽';
+        sheet.getCell(`B${row}`).font = { bold: true };
+        row++;
+        
+        sheet.getCell(`A${row}`).value = 'Успешных:';
+        sheet.getCell(`B${row}`).value = completedCount;
+        row++;
+        
+        sheet.getCell(`A${row}`).value = 'В обработке:';
+        sheet.getCell(`B${row}`).value = pendingCount;
+        row++;
+        
+        
+        // ЗАГОЛОВКИ ТАБЛИЦЫ
+        const headers = ['Дата', 'Время', 'Пользователь', 'ID пользователя', 'Сумма', 'Статус', 'Описание'];
+        headers.forEach((header, idx) => {
+            const col = String.fromCharCode(65 + idx);
+            sheet.getCell(`${col}${row}`).value = header;
+            sheet.getCell(`${col}${row}`).font = { bold: true };
+            sheet.getCell(`${col}${row}`).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFE8DAEF' }
+            };
+        });
+        row++;
+        
+        // ДАННЫЕ
+        paymentsData
+            .filter(p => p.amount > 0)
+            .forEach(payment => {
+                sheet.getCell(`A${row}`).value = payment.date;
+                sheet.getCell(`B${row}`).value = payment.time;
+                sheet.getCell(`C${row}`).value = payment.user_name || '';
+                sheet.getCell(`D${row}`).value = payment.user_id;
+                sheet.getCell(`E${row}`).value = payment.amount;
+                sheet.getCell(`E${row}`).numFmt = '#,##0.00 ₽';
+                sheet.getCell(`F${row}`).value = payment.status;
+                sheet.getCell(`G${row}`).value = payment.description || '';
+                
+                // Цвет строки в зависимости от статуса
+                if (payment.status === 'Успешно') {
+                    sheet.getRow(row).fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'FFE8F5E8' }
+                    };
+                } else if (payment.status === 'Ошибка' || payment.status === 'Отменен') {
+                    sheet.getRow(row).fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'FFFDE8E8' }
+                    };
+                } else if (payment.status === 'В обработке') {
+                    sheet.getRow(row).fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'FFFEF8E8' }
+                    };
+                }
+                
+                row++;
+            });
+        
+        // ИТОГ
+        sheet.getCell(`C${row}`).value = 'ИТОГО:';
+        sheet.getCell(`C${row}`).font = { bold: true };
+        sheet.getCell(`E${row}`).value = totalAmount;
+        sheet.getCell(`E${row}`).numFmt = '#,##0.00 ₽';
+        sheet.getCell(`E${row}`).font = { bold: true };
+        
+        // Настройка ширины колонок
+        sheet.columns = [
+            { width: 12 }, // A - Дата
+            { width: 10 }, // B - Время
+            { width: 25 }, // C - Пользователь
+            { width: 15 }, // D - ID пользователя
+            { width: 15 }, // E - Сумма
+            { width: 15 }, // F - Статус
+            { width: 30 }  // G - Описание
+        ];
+        
+        // Сохранение файла
+        const dateStr = new Date().toISOString().split('T')[0];
+        const filename = `отчет_платежи_${dateStr}.xlsx`;
+        
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { 
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+        });
+        
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    }
+
+    // НОВЫЙ МЕТОД: Создание Excel для пользователей
+    async createSimpleUsersExcel(usersData, config) {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Пользователи');
+        
+        let row = 1;
+        
+        // ЗАГОЛОВОК
+        sheet.mergeCells(`A${row}:F${row}`);
+        const titleCell = sheet.getCell(`A${row}`);
+        titleCell.value = '👥 ОТЧЕТ ПО ПОЛЬЗОВАТЕЛЯМ';
+        titleCell.font = { bold: true, size: 16, color: { argb: 'FF3498DB' } };
+        titleCell.alignment = { horizontal: 'center' };
+        row += 2;
+        
+        // ПЕРИОД
+        if (config.dateStart || config.dateEnd) {
+            sheet.getCell(`A${row}`).value = 'Период регистрации:';
+            sheet.getCell(`A${row}`).font = { bold: true };
+            sheet.getCell(`B${row}`).value = `${config.dateStart || 'Все время'} - ${config.dateEnd || 'Все время'}`;
+            row++;
+        }
+        
+        sheet.getCell(`A${row}`).value = 'Дата формирования:';
+        sheet.getCell(`B${row}`).value = new Date().toLocaleString('ru-RU');
+        row += 2;
+        
+        // СТАТИСТИКА
+        const activeUsers = usersData.filter(u => u.status === 'Активен').length;
+        const totalBalance = usersData.reduce((sum, u) => sum + u.balance, 0);
+        
+        sheet.getCell(`A${row}`).value = 'Всего пользователей:';
+        sheet.getCell(`B${row}`).value = usersData.length;
+        sheet.getCell(`B${row}`).font = { bold: true };
+        row++;
+        
+        sheet.getCell(`A${row}`).value = 'Активных:';
+        sheet.getCell(`B${row}`).value = activeUsers;
+        row++;
+        
+        sheet.getCell(`A${row}`).value = 'С балансом > 0:';
+        sheet.getCell(`B${row}`).value = usersData.filter(u => u.balance > 0).length;
+        row++;
+        
+        sheet.getCell(`A${row}`).value = 'Общий баланс:';
+        sheet.getCell(`B${row}`).value = totalBalance;
+        sheet.getCell(`B${row}`).numFmt = '#,##0.00 ₽';
+        sheet.getCell(`B${row}`).font = { bold: true };
+        row += 2;
+        
+        // ЗАГОЛОВКИ ТАБЛИЦЫ
+        const headers = ['ID', 'Имя', 'Email', 'Телефон', 'Баланс', 'Тариф', 'Статус', 'Дата регистрации'];
+        headers.forEach((header, idx) => {
+            const col = String.fromCharCode(65 + idx);
+            sheet.getCell(`${col}${row}`).value = header;
+            sheet.getCell(`${col}${row}`).font = { bold: true };
+            sheet.getCell(`${col}${row}`).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFD6EAF8' }
+            };
+        });
+        row++;
+        
+        // ДАННЫЕ
+        usersData.forEach(user => {
+            sheet.getCell(`A${row}`).value = user.id;
+            sheet.getCell(`B${row}`).value = user.name;
+            sheet.getCell(`C${row}`).value = user.email || '';
+            sheet.getCell(`D${row}`).value = user.phone || '';
+            sheet.getCell(`E${row}`).value = user.balance;
+            sheet.getCell(`E${row}`).numFmt = '#,##0.00 ₽';
+            sheet.getCell(`F${row}`).value = user.tariff;
+            sheet.getCell(`G${row}`).value = user.status;
+            sheet.getCell(`H${row}`).value = user.reg_date || '';
+            
+            // Цвет строки в зависимости от статуса
+            if (user.status === 'Активен') {
+                sheet.getRow(row).fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFE8F5E8' }
+                };
+            } else {
+                sheet.getRow(row).fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFF0F0F0' }
+                };
+            }
+            
+            row++;
+        });
+        
+        // ИТОГ
+        sheet.getCell(`D${row}`).value = 'ИТОГО БАЛАНС:';
+        sheet.getCell(`D${row}`).font = { bold: true };
+        sheet.getCell(`E${row}`).value = totalBalance;
+        sheet.getCell(`E${row}`).numFmt = '#,##0.00 ₽';
+        sheet.getCell(`E${row}`).font = { bold: true };
+        
+        // Настройка ширины колонок
+        sheet.columns = [
+            { width: 10 }, // A - ID
+            { width: 25 }, // B - Имя
+            { width: 25 }, // C - Email
+            { width: 15 }, // D - Телефон
+            { width: 15 }, // E - Баланс
+            { width: 15 }, // F - Тариф
+            { width: 12 }, // G - Статус
+            { width: 12 }  // H - Дата регистрации
+        ];
+        
+        // Сохранение файла
+        const dateStr = new Date().toISOString().split('T')[0];
+        const filename = `отчет_пользователи_${dateStr}.xlsx`;
+        
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { 
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+        });
+        
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    }
+
     async generateCombinedReport(config) {
         this.showProgress('Загрузка платежей...', 20);
         const paymentsData = await this.loadPaymentsData(config);
@@ -119,6 +428,11 @@ class ReportGenerator {
                         return false;
                     }
                 });
+            }
+            
+            // Фильтрация по статусу (для отчетов по платежам)
+            if (config.status && config.status !== 'all') {
+                filteredPayments = filteredPayments.filter(p => p.status === config.status);
             }
             
             // Загружаем данные пользователей для платежей
@@ -226,6 +540,14 @@ class ReportGenerator {
                     } catch (error) {
                         return false;
                     }
+                });
+            }
+            
+            // Фильтрация по тарифу (для отчетов по пользователям)
+            if (config.tariffFilter && config.tariffFilter !== 'all') {
+                filteredUsers = filteredUsers.filter(user => {
+                    const tariffName = this.getCleanTariffName(user);
+                    return tariffName === config.tariffFilter;
                 });
             }
             
